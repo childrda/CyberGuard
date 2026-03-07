@@ -250,6 +250,19 @@ Place your logo at `public/images/cyberguard-logo.png`. For the Gmail add-on ico
 
 ---
 
+## Security (production checklist)
+
+- **Change default passwords.** Seeded users (platform_admin, admin, viewer) use the password from `.env`. In production, set `SEEDER_DEFAULT_PASSWORD` to a strong value before running `php artisan db:seed`; the seeder will not create users with `password` when `APP_ENV=production`.
+- **Never run with `APP_DEBUG=true` in production.** Set `APP_DEBUG=false` and ensure `APP_URL` is correct (used for redirect validation and links).
+- **Keep `PHISHING_WEBHOOK_SECRET` strong and per-tenant.** The webhook rejects requests with an invalid HMAC; use a long random value and rotate if compromised.
+- **Restrict Gmail add-on and webhook.** Deploy the add-on only to your Google Workspace domain. Put the app behind HTTPS and restrict admin routes to trusted networks/VPN if possible.
+- **Credentials and logs.** Do not commit `.env`. Google service account JSON must be stored outside the web root. Production logs do not include credentials paths or full exception messages.
+- **Tenant isolation.** Each tenant has its own webhook secret and data scope; do not reuse the same secret across tenants.
+- **Landing page HTML.** Training/landing content from the database is sanitized (safe tags only; script and `javascript:`/`data:` URLs removed) to prevent stored XSS. Only allow trusted admins to create landing pages.
+- **Redirect safety.** Tracking redirects are limited to the same host as `APP_URL`; set `APP_URL` correctly in production.
+
+---
+
 ## License
 
 MIT.

@@ -46,25 +46,36 @@ class ReportWebhookController extends Controller
         $data = $request->all();
         $reporterEmail = $data['reporter_email'] ?? $data['user_email'] ?? null;
         $reportType = $data['report_type'] ?? 'phish';
+        $allowedReportTypes = ['phish', 'spam', 'safe'];
+        if (! in_array($reportType, $allowedReportTypes, true)) {
+            $reportType = 'phish';
+        }
         $gmailMessageId = $data['gmail_message_id'] ?? $data['message_id'] ?? null;
-        $subject = $data['subject'] ?? null;
+        $subject = is_string($data['subject'] ?? null) ? mb_substr($data['subject'], 0, 1000) : null;
         $from = $data['from'] ?? null;
-        $fromAddress = is_array($from) ? ($from['email'] ?? $from['address'] ?? null) : $from;
-        $snippet = $data['snippet'] ?? null;
+        $fromAddress = is_array($from) ? ($from['email'] ?? $from['address'] ?? null) : (is_string($from) ? $from : null);
+        $snippet = is_string($data['snippet'] ?? null) ? mb_substr($data['snippet'], 0, 2000) : null;
         $userActions = $data['user_actions'] ?? [];
+        $userActions = is_array($userActions) ? array_slice(array_filter(array_map(function ($a) {
+            return is_string($a) ? mb_substr($a, 0, 100) : null;
+        }, $userActions)), 0, 20) : [];
         $headers = $data['headers'] ?? [];
         $messageIdHeader = null;
         if (is_array($headers)) {
             foreach (['Message-ID', 'message-id'] as $key) {
-                if (! empty($headers[$key])) {
-                    $messageIdHeader = is_string($headers[$key]) ? trim($headers[$key]) : null;
+                if (! empty($headers[$key]) && is_string($headers[$key])) {
+                    $messageIdHeader = trim(mb_substr($headers[$key], 0, 500));
                     break;
                 }
             }
         }
 
-        if (! $reporterEmail) {
+        if (! $reporterEmail || ! is_string($reporterEmail)) {
             return response()->json(['error' => 'Missing reporter_email'], 422);
+        }
+        $reporterEmail = trim(mb_substr($reporterEmail, 0, 255));
+        if (! filter_var($reporterEmail, FILTER_VALIDATE_EMAIL)) {
+            return response()->json(['error' => 'Invalid reporter_email'], 422);
         }
 
         $phishingMessage = null;
@@ -96,13 +107,13 @@ class ReportWebhookController extends Controller
             'to_addresses' => is_array($data['to'] ?? null) ? implode(', ', $data['to']) : ($data['to_addresses'] ?? null),
             'message_date' => isset($data['date']) ? $data['date'] : null,
             'snippet' => $snippet,
-            'headers' => $data['headers'] ?? null,
             'report_type' => $reportType,
             'source' => 'addon',
             'message_id_header' => $messageIdHeader,
             'phishing_message_id' => $phishingMessage?->id,
             'analyst_status' => $phishingMessage ? 'analyst_confirmed_simulation' : null,
             'user_actions' => $userActions,
+            'headers' => $messageIdHeader ? ['Message-ID' => $messageIdHeader] : null,
         ]);
 
         PhishingReport::create([

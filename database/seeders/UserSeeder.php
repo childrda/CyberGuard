@@ -12,6 +12,15 @@ class UserSeeder extends Seeder
 {
     public function run(): void
     {
+        $defaultPassword = 'password';
+        if (app()->environment('production')) {
+            $defaultPassword = env('SEEDER_DEFAULT_PASSWORD');
+            if (empty($defaultPassword) || $defaultPassword === 'password') {
+                $this->command->warn('UserSeeder: In production, set SEEDER_DEFAULT_PASSWORD in .env to a strong password, or skip this seeder.');
+                return;
+            }
+        }
+
         $defaultTenant = Tenant::where('domain', 'example.com')->first();
         $tenantId = $defaultTenant?->id;
 
@@ -20,7 +29,7 @@ class UserSeeder extends Seeder
             ['email' => 'platform_admin@example.com'],
             [
                 'name' => 'Platform Admin',
-                'password' => Hash::make('password'),
+                'password' => Hash::make($defaultPassword),
                 'email_verified_at' => now(),
                 'tenant_id' => null,
             ]
@@ -32,7 +41,7 @@ class UserSeeder extends Seeder
             ['email' => 'admin@example.com'],
             [
                 'name' => 'Admin User',
-                'password' => Hash::make('password'),
+                'password' => Hash::make($defaultPassword),
                 'email_verified_at' => now(),
                 'tenant_id' => $tenantId,
             ]
@@ -46,7 +55,7 @@ class UserSeeder extends Seeder
             ['email' => 'viewer@example.com'],
             [
                 'name' => 'Viewer User',
-                'password' => Hash::make('password'),
+                'password' => Hash::make($defaultPassword),
                 'email_verified_at' => now(),
                 'tenant_id' => $tenantId,
             ]

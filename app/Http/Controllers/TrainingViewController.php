@@ -22,8 +22,8 @@ class TrainingViewController extends Controller
             $template = $message->campaign->template;
             if ($template->training_page_id) {
                 $page = LandingPage::find($template->training_page_id);
-                if ($page) {
-                    $content = $page->html_content ?? $content;
+                if ($page && ! empty($page->html_content)) {
+                    $content = $this->sanitizeTrainingHtml($page->html_content);
                 }
             }
         }
@@ -63,5 +63,18 @@ class TrainingViewController extends Controller
         <p>You clicked a link in a training email. No real data was collected.</p>
         <p>Learn to spot phishing: check sender address, hover links before clicking, and report suspicious messages.</p>
         <p><a href="'.url('/training/thanks').'">Continue</a></p>';
+    }
+
+    /**
+     * Sanitize HTML from landing pages to prevent stored XSS. Allows only safe tags;
+     * strips script, iframe, object, and javascript:/data: in href/src.
+     */
+    private function sanitizeTrainingHtml(string $html): string
+    {
+        $allowed = '<p><a><h1><h2><h3><h4><ul><ol><li><strong><em><b><i><u><br><hr><div><span>';
+        $html = strip_tags($html, $allowed);
+        $html = preg_replace('/\s+(href|src)\s*=\s*["\'][^"\']*javascript:[^"\']*["\']/i', '', $html);
+        $html = preg_replace('/\s+(href|src)\s*=\s*["\'][^"\']*data:[^"\']*["\']/i', '', $html);
+        return $html;
     }
 }

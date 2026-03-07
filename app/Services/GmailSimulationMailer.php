@@ -21,7 +21,9 @@ class GmailSimulationMailer
         ?string $replyTo = null
     ): array {
         if (! config('phishing.simulation_enabled', false)) {
-            Log::info('Phishing simulation disabled; would send to '.$to.' subject: '.$subject);
+            if (config('app.env') !== 'production') {
+                Log::info('Phishing simulation disabled; would send to [redacted]');
+            }
             return ['message_id' => null, 'skipped' => true];
         }
 
@@ -40,7 +42,7 @@ class GmailSimulationMailer
             });
             return ['message_id' => 'local-'.uniqid()];
         } catch (\Throwable $e) {
-            Log::error('GmailSimulationMailer send failed: '.$e->getMessage());
+            Log::error('GmailSimulationMailer send failed');
             throw $e;
         }
     }

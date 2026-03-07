@@ -23,7 +23,7 @@ class GmailRemovalService
         }
         $path = config('phishing.google_credentials_path');
         if (! is_file($path)) {
-            Log::warning('GmailRemovalService: credentials file not found at '.$path);
+            Log::warning('GmailRemovalService: credentials file not found or not readable');
             return;
         }
         try {
@@ -36,7 +36,7 @@ class GmailRemovalService
             ]);
             $this->client->setSubject(null); // set per-request when impersonating
         } catch (\Throwable $e) {
-            Log::error('GmailRemovalService: failed to init client: '.$e->getMessage());
+            Log::error('GmailRemovalService: failed to init client');
             $this->client = null;
         }
     }
@@ -59,8 +59,8 @@ class GmailRemovalService
             $gmail->users_messages->trash('me', $reported->gmail_message_id);
             return ['ok' => true, 'message' => 'Message trashed in reporter mailbox.'];
         } catch (\Throwable $e) {
-            Log::warning('GmailRemovalService removeFromUserMailbox: '.$e->getMessage());
-            return ['ok' => false, 'error' => $e->getMessage()];
+            Log::warning('GmailRemovalService removeFromUserMailbox failed');
+            return ['ok' => false, 'error' => 'Operation failed.'];
         }
     }
 
@@ -155,7 +155,7 @@ class GmailRemovalService
             } while ($pageToken);
             return $users;
         } catch (\Throwable $e) {
-            Log::warning('GmailRemovalService listDomainUsers: '.$e->getMessage());
+            Log::warning('GmailRemovalService listDomainUsers failed');
             return [];
         }
     }
