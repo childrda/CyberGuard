@@ -1,0 +1,89 @@
+<?php
+
+/**
+ * Phishing awareness platform configuration.
+ * Authorized internal security awareness testing only.
+ */
+
+return [
+    /*
+    |--------------------------------------------------------------------------
+    | Phishing simulation enabled
+    |--------------------------------------------------------------------------
+    | When false, no simulation emails are sent. Safe default for development.
+    */
+    'simulation_enabled' => env('PHISHING_SIMULATION_ENABLED', false),
+
+    /*
+    |--------------------------------------------------------------------------
+    | Gmail Report Add-on enabled
+    |--------------------------------------------------------------------------
+    */
+    'gmail_report_addon_enabled' => env('GMAIL_REPORT_ADDON_ENABLED', true),
+
+    /*
+    |--------------------------------------------------------------------------
+    | Gmail removal (trash phishing from mailboxes)
+    |--------------------------------------------------------------------------
+    | When true and Google credentials are set, analysts can remove confirmed
+    | real phishing from reporter's mailbox and optionally domain-wide.
+    */
+    'gmail_removal_enabled' => env('PHISHING_GMAIL_REMOVAL_ENABLED', false),
+
+    /*
+    |--------------------------------------------------------------------------
+    | Allowed sender domains
+    |--------------------------------------------------------------------------
+    | Only these domains may receive simulation emails. Hard block on external.
+    */
+    'allowed_target_domains' => array_filter(explode(',', env('PHISHING_ALLOWED_DOMAINS', ''))),
+
+    /*
+    |--------------------------------------------------------------------------
+    | Default from domain
+    |--------------------------------------------------------------------------
+    */
+    'default_from_domain' => env('PHISHING_FROM_DOMAIN', env('MAIL_FROM_DOMAIN', 'example.com')),
+
+    /*
+    |--------------------------------------------------------------------------
+    | Webhook secret for Gmail add-on
+    |--------------------------------------------------------------------------
+    | Shared secret to verify incoming report payloads. Encrypt in production.
+    */
+    'webhook_secret' => env('PHISHING_WEBHOOK_SECRET'),
+
+    /*
+    |--------------------------------------------------------------------------
+    | Google API (Gmail removal, future Directory)
+    |--------------------------------------------------------------------------
+    | Path to service account JSON. Domain-wide delegation must be enabled
+    | for Gmail API and Admin SDK (Directory) in Google Cloud Console.
+    */
+    'google_credentials_path' => env('GOOGLE_APPLICATION_CREDENTIALS'),
+    'google_domain' => env('GOOGLE_WORKSPACE_DOMAIN', ''),
+    'google_admin_user' => env('GOOGLE_ADMIN_USER', ''),
+
+    /*
+    |--------------------------------------------------------------------------
+    | Tracking link route prefix
+    |--------------------------------------------------------------------------
+    */
+    'tracking_prefix' => env('PHISHING_TRACKING_PREFIX', 't'),
+
+    /*
+    |--------------------------------------------------------------------------
+    | Open tracking
+    |--------------------------------------------------------------------------
+    | Best-effort only; not authoritative.
+    */
+    'open_tracking_enabled' => env('PHISHING_OPEN_TRACKING', true),
+
+    /*
+    |--------------------------------------------------------------------------
+    | Credential capture (training only)
+    |--------------------------------------------------------------------------
+    | We never store real passwords. Only record that a submission occurred.
+    */
+    'credential_capture_placeholder' => 'submitted',
+];
