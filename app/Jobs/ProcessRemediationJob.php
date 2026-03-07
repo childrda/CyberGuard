@@ -50,7 +50,6 @@ class ProcessRemediationJob implements ShouldQueue
                 'message_identifier' => $messageIdHeader,
                 'status' => 'pending',
             ]);
-            $result = $removal->trashMessageByRfc822MessageId($email, $messageIdHeader ?? '');
             if ($dryRun) {
                 MailboxActionLog::create([
                     'tenant_id' => $tenant->id,
@@ -67,7 +66,10 @@ class ProcessRemediationJob implements ShouldQueue
                 ]);
                 $item->update(['status' => 'logged', 'processed_at' => now()]);
                 $success++;
-            } elseif ($result['ok']) {
+                continue;
+            }
+            $result = $removal->trashMessageByRfc822MessageId($email, $messageIdHeader ?? '');
+            if ($result['ok']) {
                 if (! empty($result['skipped'])) {
                     $item->update(['status' => 'skipped', 'processed_at' => now()]);
                 } else {

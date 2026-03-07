@@ -75,6 +75,20 @@ class ReportedMessageController extends Controller
             'metadata' => ['analyst_id' => auth()->id()],
         ]);
 
+        $tenant = $reported->tenant;
+        if ($tenant && $reported->reporter_email) {
+            app(\App\Services\ShieldPointsService::class)->award(
+                $tenant->id,
+                $reported->reporter_email,
+                'reported_phish',
+                10,
+                'Reported real phishing (analyst confirmed)',
+                null,
+                $reported->id,
+                null
+            );
+        }
+
         $this->audit->log('report_confirmed_real', $reported);
 
         return redirect()->route('admin.reports.show', $reported)

@@ -27,17 +27,21 @@ class ReportWebhookController extends Controller
         $data = json_decode($payload, true) ?: [];
         $reporterEmail = $data['reporter_email'] ?? $data['user_email'] ?? null;
         $tenantDomain = $request->header('X-Tenant-Domain') ?? $data['tenant_domain'] ?? null;
-        if (! $tenantDomain && $reporterEmail && str_contains($reporterEmail, '@')) {
+        if (! $tenantDomain && $reporterEmail && is_string($reporterEmail) && str_contains($reporterEmail, '@')) {
             $tenantDomain = substr($reporterEmail, strrpos($reporterEmail, '@') + 1);
         }
         $tenant = $tenantDomain ? \App\Models\Tenant::where('domain', $tenantDomain)->orWhere('slug', $tenantDomain)->first() : null;
-        $secret = $tenant ? $tenant->webhook_secret : config('phishing.webhook_secret');
-        if (empty($secret)) {
-            Log::warning('Report webhook: no secret for tenant or global');
+
+        if (! $tenant) {
+            Log::warning('Report webhook: tenant could not be resolved');
+            return response()->json(['error' => 'Unknown tenant'], 422);
+        }
+        if (empty($tenant->webhook_secret)) {
+            Log::warning('Report webhook: tenant has no webhook secret');
             return response()->json(['error' => 'Configuration error'], 500);
         }
         $signature = $request->header('X-Phish-Signature') ?? $request->header('X-Webhook-Signature') ?? '';
-        $expected = 'sha256='.hash_hmac('sha256', $payload, $secret);
+        $expected = 'sha256='.hash_hmac('sha256', $payload, $tenant->webhook_secret);
         if (! hash_equals($expected, $signature)) {
             Log::warning('Report webhook: invalid signature');
             return response()->json(['error' => 'Invalid signature'], 401);
@@ -131,14 +135,14 @@ class ReportWebhookController extends Controller
             ]);
         }
 
-        if ($tenant) {
+        if ($tenant && $phishingMessage) {
             app(\App\Services\ShieldPointsService::class)->award(
                 $tenant->id,
                 $reporterEmail,
-                'reported_phish',
+                'simulation_reported',
                 10,
-                'Reported message',
-                null,
+                'Reported simulation',
+                $phishingMessage->campaign_id ?? null,
                 $reported->id,
                 null
             );

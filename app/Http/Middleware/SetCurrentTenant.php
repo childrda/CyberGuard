@@ -18,8 +18,22 @@ class SetCurrentTenant
             session(['current_tenant_id' => $tenantId]);
         }
 
-        if ($tenantId && Tenant::find($tenantId)) {
-            app()->instance('current_tenant_id', $tenantId);
+        $tenant = $tenantId ? Tenant::find($tenantId) : null;
+        if (auth()->check()) {
+            $user = auth()->user();
+            $allowed = $tenant && (
+                $user->isPlatformAdmin()
+                || $user->tenant_id === $tenant->id
+            );
+            if (! $allowed) {
+                $tenantId = $user->tenant_id;
+                session(['current_tenant_id' => $tenantId]);
+                $tenant = $tenantId ? Tenant::find($tenantId) : null;
+            }
+        }
+
+        if ($tenant && $tenant->active) {
+            app()->instance('current_tenant_id', $tenant->id);
         } else {
             app()->instance('current_tenant_id', null);
         }

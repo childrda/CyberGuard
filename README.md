@@ -6,7 +6,7 @@ Production-ready internal phishing awareness platform for **authorized security 
 
 ## Quick start (minimal install)
 
-If you have PHP 8.3+, Composer, and MySQL installed:
+If you have PHP 8.2+, Composer, and MySQL installed:
 
 ```bash
 # 1. Install and configure
@@ -35,7 +35,7 @@ Then open **http://localhost:8000** and log in with **admin@example.com** / **pa
 
 | Requirement | Notes |
 |-------------|--------|
-| **PHP 8.3+** | With extensions: mbstring, xml, pdo_mysql, json, openssl, tokenizer |
+| **PHP 8.2+** | With extensions: mbstring, xml, pdo_mysql, json, openssl, tokenizer |
 | **Composer** | [getcomposer.org](https://getcomposer.org) |
 | **MySQL 8+** | Or MariaDB 10.3+ |
 | **Redis** (optional) | For production queues/cache; for local you can use `CACHE_STORE=file` and `QUEUE_CONNECTION=sync` |
@@ -104,14 +104,16 @@ PHISHING_SIMULATION_ENABLED=false
 PHISHING_ALLOWED_DOMAINS=example.com
 ```
 
-### 3. Run migrations and seed data
+### 3. Run migrations and seed data (local / dev only)
 
 ```bash
 php artisan migrate
 php artisan db:seed
 ```
 
-Expected: migrations run without errors; seeders create a default tenant, admin user, sample template, and campaign.
+**Seeding is for local bootstrap only.** In production, `php artisan db:seed` **will throw** and refuse to run unless you set `SEEDER_ALLOW_PRODUCTION=true` in `.env` (e.g. for a one-time initial bootstrap with your own `SEEDER_DEFAULT_PASSWORD`). Never run the default seed in a real environment without that explicit opt-in and a strong password.
+
+Expected (local): migrations run without errors; seeders create a default tenant, admin user, sample template, and campaign.
 
 ### 4. Start the application
 
@@ -121,7 +123,9 @@ php artisan serve
 
 Open **http://localhost:8000**. You should see the login page.
 
-### 5. First login
+### 5. First login (local dev only)
+
+**These credentials are for local development only. They must never be used in production.** In production, create users and tenants through your own process and never rely on seeded defaults.
 
 | Email | Password | Role | Access |
 |-------|----------|------|--------|
@@ -193,7 +197,11 @@ Details: [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
 
 ---
 
-## Webhook API (for add-on)
+## API
+
+The only public API endpoint is the report webhook below. The `/api` routes also include a Sanctum-protected group reserved for future internal admin tools; it is currently a placeholder with no routes.
+
+### Webhook (for add-on)
 
 **POST** `/api/webhook/report`
 
@@ -242,6 +250,8 @@ composer test
 php artisan test
 ```
 
+Feature tests cover: auth and dashboard access, webhook (signature, unknown tenant, valid payload with tenant), tracking, **tenant isolation** (scoped user cannot see other tenant’s reports; middleware overrides tampered session; platform admin can use any tenant), **remediation** (report_only tenant cannot approve; dry-run approval creates job with flag; run requires approved job), **points awarding** (simulation_reported and reported_phish ledger; leaderboard sum), and **role enforcement** (viewer cannot confirm phish or approve remediation; analyst can).
+
 ---
 
 ## Logo and branding
@@ -252,7 +262,7 @@ Place your logo at `public/images/cyberguard-logo.png`. For the Gmail add-on ico
 
 ## Security (production checklist)
 
-- **Change default passwords.** Seeded users (platform_admin, admin, viewer) use the password from `.env`. In production, set `SEEDER_DEFAULT_PASSWORD` to a strong value before running `php artisan db:seed`; the seeder will not create users with `password` when `APP_ENV=production`.
+- **Seeding.** In production, `php artisan db:seed` is blocked unless `SEEDER_ALLOW_PRODUCTION=true` in `.env`. Use that only for intentional one-time bootstrap; set `SEEDER_DEFAULT_PASSWORD` to a strong value (required when `APP_ENV=production`).
 - **Never run with `APP_DEBUG=true` in production.** Set `APP_DEBUG=false` and ensure `APP_URL` is correct (used for redirect validation and links).
 - **Keep `PHISHING_WEBHOOK_SECRET` strong and per-tenant.** The webhook rejects requests with an invalid HMAC; use a long random value and rotate if compromised.
 - **Restrict Gmail add-on and webhook.** Deploy the add-on only to your Google Workspace domain. Put the app behind HTTPS and restrict admin routes to trusted networks/VPN if possible.

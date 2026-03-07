@@ -95,10 +95,10 @@ class GmailRemovalService
         $errors = [];
         foreach ($users as $userEmail) {
             $result = $this->trashMessageByRfc822MessageId($userEmail, $messageIdHeader);
-            if ($result['ok']) {
+            if ($result['ok'] && empty($result['skipped'])) {
                 $trashed++;
-            } else {
-                $errors[] = $userEmail.': '.$result['error'];
+            } elseif (! $result['ok']) {
+                $errors[] = $userEmail.': '.($result['error'] ?? 'unknown');
             }
         }
 
