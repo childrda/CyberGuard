@@ -6,7 +6,7 @@ Production-ready internal phishing awareness platform for **authorized security 
 
 ## Quick start (minimal install)
 
-If you have PHP 8.2+, Composer, and MySQL installed:
+If you have PHP ^8.2 (as in `composer.json`), Composer, and MySQL installed:
 
 ```bash
 # 1. Get the code and install dependencies
@@ -36,7 +36,7 @@ Open **http://localhost:8000** and log in with **admin@example.com** / **passwor
 
 | Requirement | Notes |
 |-------------|--------|
-| **PHP 8.2+** | With extensions: mbstring, xml, pdo_mysql, json, openssl, tokenizer |
+| **PHP ^8.2** | Must match `composer.json`. Extensions: mbstring, xml, pdo_mysql, json, openssl, tokenizer |
 | **Composer** | [getcomposer.org](https://getcomposer.org) |
 | **MySQL 8+** | Or MariaDB 10.3+ |
 | **Redis** (optional) | For production queues/cache; for local you can use `CACHE_STORE=file` and `QUEUE_CONNECTION=sync` |
