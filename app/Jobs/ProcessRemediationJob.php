@@ -36,13 +36,16 @@ class ProcessRemediationJob implements ShouldQueue
         config(['phishing.google_domain' => $tenant->domain]);
         config(['phishing.gmail_removal_enabled' => true]);
 
-        $removal = new \App\Services\GmailRemovalService();
+        $removal = app(GmailRemovalService::class);
         $messageIdHeader = $reported->message_id_header ?? $this->extractMessageId($reported->headers);
         $users = $removal->listDomainUsers($tenant->domain);
         $dryRun = $this->job->dry_run;
 
-        $success = 0;
-        $failed = 0;
+        $removedCount = 0;
+        $skippedCount = 0;
+        $dryRunCount = 0;
+        $failedCount = 0;
+
         foreach ($users as $email) {
             $item = RemediationJobItem::create([
                 'remediation_job_id' => $this->job->id,
@@ -65,16 +68,17 @@ class ProcessRemediationJob implements ShouldQueue
                     'created_at' => now(),
                 ]);
                 $item->update(['status' => 'logged', 'processed_at' => now()]);
-                $success++;
+                $dryRunCount++;
                 continue;
             }
             $result = $removal->trashMessageByRfc822MessageId($email, $messageIdHeader ?? '');
             if ($result['ok']) {
                 if (! empty($result['skipped'])) {
                     $item->update(['status' => 'skipped', 'processed_at' => now()]);
+                    $skippedCount++;
                 } else {
                     $item->update(['status' => 'success', 'processed_at' => now()]);
-                    $success++;
+                    $removedCount++;
                 }
                 MailboxActionLog::create([
                     'tenant_id' => $tenant->id,
@@ -83,7 +87,7 @@ class ProcessRemediationJob implements ShouldQueue
                     'mailbox_email' => $email,
                     'message_identifier' => $messageIdHeader,
                     'action_attempted' => 'trash',
-                    'action_result' => $result['ok'] ? 'success' : 'failed',
+                    'action_result' => ! empty($result['skipped']) ? 'skipped' : 'success',
                     'actor_id' => $this->job->approved_by,
                     'actor_type' => 'automation',
                     'api_response_summary' => $result['error'] ?? null,
@@ -91,7 +95,7 @@ class ProcessRemediationJob implements ShouldQueue
                 ]);
             } else {
                 $item->update(['status' => 'failed', 'error_message' => $result['error'] ?? '', 'processed_at' => now()]);
-                $failed++;
+                $failedCount++;
                 MailboxActionLog::create([
                     'tenant_id' => $tenant->id,
                     'remediation_job_id' => $this->job->id,
@@ -108,12 +112,31 @@ class ProcessRemediationJob implements ShouldQueue
             }
         }
 
-        $status = $failed === 0 ? RemediationJob::STATUS_REMOVED : ($success > 0 ? RemediationJob::STATUS_PARTIALLY_FAILED : RemediationJob::STATUS_FAILED);
+        $status = $this->resolveFinalStatus($dryRun, $removedCount, $skippedCount, $dryRunCount, $failedCount);
+        $failureSummary = $failedCount > 0
+            ? "{$failedCount} failed"
+            : ($dryRun && $dryRunCount > 0 ? "Simulated: {$dryRunCount} mailboxes (no messages trashed)" : null);
+
         $this->job->update([
             'status' => $status,
             'completed_at' => now(),
-            'failure_summary' => $failed > 0 ? "{$failed} failed" : null,
+            'failure_summary' => $failureSummary,
+            'removed_count' => $removedCount,
+            'skipped_count' => $skippedCount,
+            'dry_run_count' => $dryRunCount,
+            'failed_count' => $failedCount,
         ]);
+    }
+
+    private function resolveFinalStatus(bool $dryRun, int $removedCount, int $skippedCount, int $dryRunCount, int $failedCount): string
+    {
+        if ($dryRun && $dryRunCount > 0 && $removedCount === 0 && $failedCount === 0) {
+            return RemediationJob::STATUS_DRY_RUN_COMPLETED;
+        }
+        if ($failedCount > 0) {
+            return $removedCount > 0 ? RemediationJob::STATUS_PARTIALLY_FAILED : RemediationJob::STATUS_FAILED;
+        }
+        return RemediationJob::STATUS_REMOVED;
     }
 
     private function extractMessageId(?array $headers): ?string

@@ -103,7 +103,13 @@
     @if($reported->analyst_status === 'analyst_confirmed_real')
         <div class="mt-6 pt-6 border-t border-slate-200">
             <h3 class="text-sm font-medium text-slate-700 mb-2">Remediation job</h3>
-            @php $approvedJob = $reported->remediationJobs()->where('status', \App\Models\RemediationJob::STATUS_APPROVED_FOR_REMOVAL)->latest()->first(); @endphp
+            @php
+                $approvedJob = $reported->remediationJobs()->where('status', \App\Models\RemediationJob::STATUS_APPROVED_FOR_REMOVAL)->latest()->first();
+                $latestJob = $reported->remediationJobs()->latest()->first();
+            @endphp
+            @if($latestJob && $latestJob->status !== \App\Models\RemediationJob::STATUS_APPROVED_FOR_REMOVAL)
+                <p class="text-sm text-slate-600 mb-2">Latest: <a href="{{ route('admin.remediation.show', $latestJob) }}" class="text-blue-600 hover:underline">Job #{{ $latestJob->id }}</a> — {{ $latestJob->statusLabel() }}</p>
+            @endif
             @if(! $approvedJob)
                 <form method="post" action="{{ route('admin.remediation.approve', $reported) }}" class="space-y-2">
                     @csrf
