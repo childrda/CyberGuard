@@ -12,6 +12,7 @@ class PhishingMessage extends Model
     use HasFactory;
     protected $fillable = [
         'campaign_id',
+        'attack_id',
         'recipient_email',
         'recipient_name',
         'tracking_token',
@@ -35,6 +36,11 @@ class PhishingMessage extends Model
     public function campaign(): BelongsTo
     {
         return $this->belongsTo(PhishingCampaign::class, 'campaign_id');
+    }
+
+    public function attack(): BelongsTo
+    {
+        return $this->belongsTo(PhishingAttack::class, 'attack_id');
     }
 
     public function events(): HasMany

@@ -28,20 +28,36 @@ class SendPhishingSimulationJob implements ShouldQueue
         }
 
         $msg = $this->message;
-        $msg->load('campaign.template');
+        $msg->load('campaign.template', 'attack');
 
+        $attack = $msg->attack;
         $template = $msg->campaign->template;
-        $body = $mailer->injectTrackingIntoBody($template->html_body, $msg->tracking_token);
+        if ($attack) {
+            $subject = $attack->subject;
+            $htmlBody = $attack->html_body;
+            $textBody = $attack->text_body ?? strip_tags($attack->html_body);
+            $fromName = $attack->from_name ?? $template?->sender_name;
+            $fromEmail = $attack->from_email ?? $template?->sender_email;
+            $replyTo = $template?->reply_to;
+        } else {
+            $subject = $template->subject;
+            $htmlBody = $template->html_body;
+            $textBody = $template->text_body;
+            $fromName = $template->sender_name;
+            $fromEmail = $template->sender_email;
+            $replyTo = $template->reply_to;
+        }
+        $body = $mailer->injectTrackingIntoBody($htmlBody, $msg->tracking_token);
 
         try {
             $result = $mailer->send(
                 to: $msg->recipient_email,
-                subject: $template->subject,
+                subject: $subject,
                 htmlBody: $body,
-                textBody: $template->text_body,
-                fromName: $template->sender_name,
-                fromEmail: $template->sender_email,
-                replyTo: $template->reply_to
+                textBody: $textBody,
+                fromName: $fromName,
+                fromEmail: $fromEmail,
+                replyTo: $replyTo
             );
 
             $msg->update([
@@ -49,6 +65,9 @@ class SendPhishingSimulationJob implements ShouldQueue
                 'sent_at' => now(),
                 'message_id' => $result['message_id'] ?? null,
             ]);
+            if ($attack) {
+                $attack->increment('times_sent');
+            }
             PhishingEvent::create([
                 'message_id' => $msg->id,
                 'event_type' => 'sent',

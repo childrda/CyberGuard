@@ -25,6 +25,21 @@
         @error('template_id')<p class="mt-1 text-sm text-red-600">{{ $message }}</p>@enderror
     </div>
     <div>
+        <label class="block text-sm font-medium text-slate-700">Attack templates (optional)</label>
+        <p class="text-sm text-slate-500 mb-2">Select one or more to mix phishing content per recipient. If none selected, the template above is used for everyone.</p>
+        <div class="mt-1 space-y-2 max-h-48 overflow-y-auto rounded border border-slate-300 p-3 bg-slate-50">
+            @forelse($attacks as $a)
+                <label class="flex items-center gap-2">
+                    <input type="checkbox" name="attack_ids[]" value="{{ $a->id }}" {{ in_array($a->id, old('attack_ids', [])) ? 'checked' : '' }} class="rounded border-slate-300">
+                    <span>{{ $a->name }}</span>
+                    <span class="text-xs text-slate-500">({{ $a->difficulty_rating }} – {{ $a->difficultyLabel() }})</span>
+                </label>
+            @empty
+                <p class="text-sm text-slate-500">No attack templates. <a href="{{ route('admin.attacks.create') }}" class="underline">Create some</a> in Attack library.</p>
+            @endforelse
+        </div>
+    </div>
+    <div>
         <label class="block text-sm font-medium text-slate-700">Target type</label>
         <select name="target_type" required class="mt-1 w-full rounded border-slate-300">
             <option value="user" @selected(old('target_type') === 'user')>User (email)</option>

@@ -1,5 +1,6 @@
 <?php
 
+use App\Http\Controllers\Admin\AttackController;
 use App\Http\Controllers\Admin\AuditLogController;
 use App\Http\Controllers\Admin\CampaignController;
 use App\Http\Controllers\Admin\DashboardController;
@@ -25,6 +26,8 @@ Route::middleware(['auth', 'verified', 'tenant'])->prefix('admin')->name('admin.
         Route::get('/campaigns/{campaign}', [CampaignController::class, 'show'])->name('campaigns.show');
         Route::get('/templates', [TemplateController::class, 'index'])->name('templates.index');
         Route::get('/templates/{template}', [TemplateController::class, 'show'])->name('templates.show');
+        Route::get('/attacks', [AttackController::class, 'index'])->name('attacks.index');
+        Route::get('/attacks/{attack}', [AttackController::class, 'show'])->name('attacks.show');
         Route::get('/leaderboard', [LeaderboardController::class, 'index'])->name('leaderboard.index');
         Route::get('/audit', [AuditLogController::class, 'index'])->name('audit.index');
         Route::get('/settings', [SettingsController::class, 'index'])->name('settings.index');
@@ -45,6 +48,7 @@ Route::middleware(['auth', 'verified', 'tenant'])->prefix('admin')->name('admin.
     Route::middleware('role:superadmin,campaign_admin')->group(function () {
         Route::resource('campaigns', CampaignController::class)->except(['index', 'show']);
         Route::resource('templates', TemplateController::class)->except(['index', 'show']);
+        Route::resource('attacks', AttackController::class)->except(['index', 'show']);
         Route::post('/campaigns/{campaign}/approve', [CampaignController::class, 'approve'])->name('campaigns.approve');
         Route::post('/campaigns/{campaign}/launch', [CampaignController::class, 'launch'])->name('campaigns.launch');
     });

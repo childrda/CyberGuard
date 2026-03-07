@@ -24,6 +24,22 @@
             @endforeach
         </select>
     </div>
+    <div>
+        <label class="block text-sm font-medium text-slate-700">Attack templates (optional)</label>
+        <p class="text-sm text-slate-500 mb-2">Select one or more to mix phishing content per recipient.</p>
+        @php $selectedAttackIds = old('attack_ids', $campaign->attacks->pluck('id')->toArray()); @endphp
+        <div class="mt-1 space-y-2 max-h-48 overflow-y-auto rounded border border-slate-300 p-3 bg-slate-50">
+            @forelse($attacks as $a)
+                <label class="flex items-center gap-2">
+                    <input type="checkbox" name="attack_ids[]" value="{{ $a->id }}" {{ in_array($a->id, $selectedAttackIds) ? 'checked' : '' }} class="rounded border-slate-300">
+                    <span>{{ $a->name }}</span>
+                    <span class="text-xs text-slate-500">({{ $a->difficulty_rating }} – {{ $a->difficultyLabel() }})</span>
+                </label>
+            @empty
+                <p class="text-sm text-slate-500">No attack templates in Attack library.</p>
+            @endforelse
+        </div>
+    </div>
     <button type="submit" class="rounded bg-slate-800 px-4 py-2 text-white">Update</button>
 </form>
 @endsection

@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Admin;
 
 use App\Http\Controllers\Controller;
+use App\Models\PhishingAttack;
 use App\Models\PhishingCampaign;
 use App\Models\PhishingCampaignTarget;
 use App\Models\PhishingTemplate;
@@ -33,7 +34,8 @@ class CampaignController extends Controller
     {
         $this->authorize('create', PhishingCampaign::class);
         $templates = PhishingTemplate::where('active', true)->get();
-        return view('admin.campaigns.create', compact('templates'));
+        $attacks = PhishingAttack::where('active', true)->orderBy('difficulty_rating')->orderBy('name')->get();
+        return view('admin.campaigns.create', compact('templates', 'attacks'));
     }
 
     public function store(Request $request): RedirectResponse
@@ -45,6 +47,8 @@ class CampaignController extends Controller
             'target_type' => ['required', 'in:user,group,csv'],
             'target_identifier' => ['required', 'string'],
             'display_name' => ['nullable', 'string'],
+            'attack_ids' => ['nullable', 'array'],
+            'attack_ids.*' => ['exists:phishing_attacks,id'],
         ]);
 
         $campaign = PhishingCampaign::create([
@@ -62,6 +66,9 @@ class CampaignController extends Controller
             'display_name' => $validated['display_name'] ?? null,
         ]);
 
+        $attackIds = PhishingAttack::whereIn('id', $request->input('attack_ids', []))->pluck('id')->toArray();
+        $campaign->attacks()->sync($attackIds);
+
         $this->audit->log('campaign_created', $campaign);
 
         return redirect()->route('admin.campaigns.show', $campaign)->with('success', 'Campaign created.');
@@ -78,7 +85,9 @@ class CampaignController extends Controller
     {
         $this->authorize('update', $campaign);
         $templates = PhishingTemplate::where('active', true)->get();
-        return view('admin.campaigns.edit', compact('campaign', 'templates'));
+        $attacks = PhishingAttack::where('active', true)->orderBy('difficulty_rating')->orderBy('name')->get();
+        $campaign->load('attacks');
+        return view('admin.campaigns.edit', compact('campaign', 'templates', 'attacks'));
     }
 
     public function update(Request $request, PhishingCampaign $campaign): RedirectResponse
@@ -87,9 +96,16 @@ class CampaignController extends Controller
         $validated = $request->validate([
             'name' => ['required', 'string', 'max:255'],
             'template_id' => ['required', 'exists:phishing_templates,id'],
+            'attack_ids' => ['nullable', 'array'],
+            'attack_ids.*' => ['exists:phishing_attacks,id'],
         ]);
-        $old = $campaign->only(array_keys($validated));
-        $campaign->update($validated);
+        $old = $campaign->only(['name', 'template_id']);
+        $campaign->update([
+            'name' => $validated['name'],
+            'template_id' => $validated['template_id'],
+        ]);
+        $attackIds = PhishingAttack::whereIn('id', $request->input('attack_ids', []))->pluck('id')->toArray();
+        $campaign->attacks()->sync($attackIds);
         $this->audit->log('campaign_updated', $campaign, $old, $validated);
         return redirect()->route('admin.campaigns.show', $campaign)->with('success', 'Campaign updated.');
     }

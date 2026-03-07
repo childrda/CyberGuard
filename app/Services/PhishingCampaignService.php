@@ -94,11 +94,16 @@ class PhishingCampaignService
             $campaign->update(['status' => 'sending', 'started_at' => $campaign->started_at ?? now()]);
             $this->audit->log('campaign_launched', $campaign, null, ['recipients_count' => count($accepted), 'rejected_count' => count($rejected)]);
 
+            $campaign->load('attacks');
+            $attackIds = $campaign->attacks->where('active', true)->pluck('id')->all();
+
             foreach ($accepted as $r) {
                 $email = is_array($r) ? ($r['email'] ?? '') : $r;
                 $name = is_array($r) ? ($r['name'] ?? null) : null;
+                $attackId = ! empty($attackIds) ? $attackIds[array_rand($attackIds)] : null;
                 $msg = PhishingMessage::create([
                     'campaign_id' => $campaign->id,
+                    'attack_id' => $attackId,
                     'recipient_email' => $email,
                     'recipient_name' => $name,
                     'tracking_token' => $this->generateTrackingToken(),

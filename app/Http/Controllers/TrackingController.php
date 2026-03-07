@@ -15,7 +15,7 @@ class TrackingController extends Controller
 {
     public function click(Request $request, string $token)
     {
-        $message = PhishingMessage::where('tracking_token', $token)->first();
+        $message = PhishingMessage::with('attack')->where('tracking_token', $token)->first();
         if (! $message) {
             Log::warning('Tracking click with invalid token');
             return $this->fallbackRedirect($request);
@@ -26,6 +26,9 @@ class TrackingController extends Controller
             $redirectUrl = $this->defaultLandingUrl($message);
         }
 
+        if ($message->attack_id) {
+            $message->attack?->increment('times_clicked');
+        }
         PhishingEvent::create([
             'message_id' => $message->id,
             'event_type' => 'clicked',
@@ -86,9 +89,14 @@ class TrackingController extends Controller
 
     private function defaultLandingUrl(PhishingMessage $message): string
     {
-        $message->load('campaign.template');
-        $template = $message->campaign->template;
-        $landingType = $template->landing_page_type ?? 'training';
+        $landingType = 'training';
+        if ($message->attack_id && $message->attack) {
+            $landingType = $message->attack->landing_page_type ?? 'training';
+        } else {
+            $message->load('campaign.template');
+            $template = $message->campaign->template;
+            $landingType = $template->landing_page_type ?? 'training';
+        }
         $base = rtrim(config('app.url'), '/');
 
         if ($landingType === 'credential_capture') {
