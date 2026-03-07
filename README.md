@@ -10,7 +10,7 @@ If you have PHP 8.3+, Composer, and MySQL installed:
 
 ```bash
 # 1. Install and configure
-cd c:\CyberNut
+cd CyberGuard
 composer install
 cp .env.example .env
 php artisan key:generate
@@ -47,7 +47,7 @@ Then open **http://localhost:8000** and log in with **admin@example.com** / **pa
 ### 1. Clone and install dependencies
 
 ```bash
-cd c:\CyberNut
+cd CyberGuard
 composer install
 cp .env.example .env
 php artisan key:generate
