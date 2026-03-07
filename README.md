@@ -9,17 +9,18 @@ Production-ready internal phishing awareness platform for **authorized security 
 If you have PHP 8.2+, Composer, and MySQL installed:
 
 ```bash
-# 1. Install and configure
+# 1. Get the code and install dependencies
+git clone <your-repo-url> CyberGuard   # or cd into your existing project folder
 cd CyberGuard
 composer install
 cp .env.example .env
 php artisan key:generate
 
-# 2. Edit .env: set your database and a webhook secret (see examples below)
-#    For local dev you can use: CACHE_STORE=file, QUEUE_CONNECTION=sync
+# 2. Edit .env: set your database and (for the add-on) a webhook secret (see below).
+#    For local dev use: CACHE_STORE=file  and  QUEUE_CONNECTION=sync
 
-# 3. Create database and run migrations
-#    Create a DB named "cyberguard" in MySQL, then:
+# 3. Create the database and run migrations
+#    In MySQL:  CREATE DATABASE cyberguard CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
 php artisan migrate
 php artisan db:seed
 
@@ -27,7 +28,7 @@ php artisan db:seed
 php artisan serve
 ```
 
-Then open **http://localhost:8000** and log in with **admin@example.com** / **password**.
+Open **http://localhost:8000** and log in with **admin@example.com** / **password** (seeded dev account).
 
 ---
 
@@ -138,13 +139,20 @@ Open **http://localhost:8000**. You should see the login page.
 
 After login, use the **tenant switcher** in the left sidebar. Scoped users see only their tenant; platform admins see all. Default tenant for seeded tenant-scoped users is **example.com**.
 
-### 6. (Optional) Run the queue worker
+### 6. (Optional) Run queue workers
 
-Only needed if you will send phishing simulations (e.g. after enabling `PHISHING_SIMULATION_ENABLED=true`):
+Only needed if you send simulations or run remediation:
 
-```bash
-php artisan queue:work --queue=phishing-send
-```
+- **Phishing simulations** (after enabling `PHISHING_SIMULATION_ENABLED=true`):
+  ```bash
+  php artisan queue:work --queue=phishing-send
+  ```
+- **Remediation jobs** (trashing confirmed phishing from mailboxes):
+  ```bash
+  php artisan queue:work --queue=remediation
+  ```
+
+To run both queues with one worker: `php artisan queue:work --queue=phishing-send,remediation`
 
 ---
 
@@ -187,11 +195,11 @@ php artisan queue:work --queue=phishing-send
 ## Features (overview)
 
 - **Multi-tenant**: Separate tenants (e.g. staff vs student) with their own domain, credentials, webhook secret, and remediation policy. Tenant switcher in the admin sidebar.
-- **Simulation campaigns**: Templates, target users/groups/CSV, send windows, approval workflow.
+- **Simulation campaigns**: Templates, target users/groups/CSV, approval workflow. Optional **attack library**: multiple phishing message variants (e.g. “account deactivation”, “Duo notification”) with difficulty ratings; attach several to a campaign to mix content per recipient.
 - **Gmail add-on**: Report Phish (with optional “I clicked the link” / “I entered information”), Report Spam, Mark Safe. Webhook matches reports to simulations and awards Shield points.
-- **Remediation**: When a report is confirmed as real phishing, approve a remediation job (optional dry run), then run to trash the message across domain mailboxes. Full logging per mailbox action.
+- **Remediation**: When a report is confirmed as real phishing, approve a remediation job (optional **dry run** to simulate without trashing), then run to trash the message across domain mailboxes. Counts for removed, skipped, dry-run (simulated), and failed; full logging per mailbox action.
 - **Shield points & leaderboard**: Points ledger and monthly leaderboard per tenant.
-- **Admin UI**: Dashboard, Reports, Remediation, Campaigns, Leaderboard, Audit Logs, Settings. RBAC: superadmin, campaign_admin, analyst, viewer.
+- **Admin UI**: Dark-themed dashboard (metrics, recent reports, campaigns, remediation job, top reporters, audit log), Reports, Remediation, Campaigns, Attack library, Leaderboard, Audit Logs, Settings. RBAC: superadmin, campaign_admin, analyst, viewer.
 
 Details: [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
 
@@ -239,6 +247,8 @@ The only public API endpoint is the report webhook below. The `/api` routes also
 | GMAIL_REPORT_ADDON_ENABLED | When `false`, webhook returns 503 | `true` |
 | PHISHING_ALLOWED_DOMAINS | Domains that may receive simulation emails (comma-separated) | `example.com` |
 | PHISHING_WEBHOOK_SECRET | Must match Apps Script WEBHOOK_SECRET | Long random string |
+| PHISHING_GMAIL_REMOVAL_ENABLED | When `true`, remediation can trash messages (requires Google credentials) | `false` (dev) |
+| PHISHING_OPEN_TRACKING | Track link opens in simulations | `true` |
 
 ---
 
@@ -250,7 +260,7 @@ composer test
 php artisan test
 ```
 
-Feature tests cover: auth and dashboard access, webhook (signature, unknown tenant, valid payload with tenant), tracking, **tenant isolation** (scoped user cannot see other tenant’s reports; middleware overrides tampered session; platform admin can use any tenant), **remediation** (report_only tenant cannot approve; dry-run approval creates job with flag; run requires approved job), **points awarding** (simulation_reported and reported_phish ledger; leaderboard sum), and **role enforcement** (viewer cannot confirm phish or approve remediation; analyst can).
+Feature tests cover: auth and dashboard access, webhook (signature, unknown tenant, valid payload with tenant), tracking, **tenant isolation** (scoped user cannot see other tenant’s reports; middleware overrides tampered session; platform admin can use any tenant), **remediation** (report_only tenant cannot approve; dry-run approval and completion status; run requires approved job; dry-run vs real removal counters and final status), **points awarding** (simulation_reported and reported_phish ledger; leaderboard sum), and **role enforcement** (viewer cannot confirm phish or approve remediation; analyst can).
 
 ---
 
