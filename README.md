@@ -178,7 +178,9 @@ If you create a campaign with a **send window** (from/to date) and **emails per 
 
 ## Gmail Report Phish add-on setup
 
-This lets users report suspicious emails from Gmail into CyberGuard. Do this **after** the Laravel app is running and you have set `PHISHING_WEBHOOK_SECRET` in `.env`.
+The **Google Workspace add-on** is included in this repo (`google-addon/` folder). Once deployed, it appears **inside Gmail** when users open an email: they see **"CyberGuard Report Phish"** with options to **Report Phish**, **Report Spam**, or **Mark Safe**. Clicking Report Phish sends the message details to your CyberGuard backend so analysts can review it. You can use a shield icon for the add-on by setting `logoUrl` in `google-addon/appsscript.json` (see [Logo and branding](#logo-and-branding)).
+
+**Set up the add-on after** the Laravel app is running and you have set `PHISHING_WEBHOOK_SECRET` in `.env`.
 
 1. **Create an Apps Script project**
    - Go to [script.google.com](https://script.google.com).
@@ -199,7 +201,7 @@ This lets users report suspicious emails from Gmail into CyberGuard. Do this **a
 3. **Deploy the add-on**
    - Click **Deploy** → **New deployment**.
    - Select type **Add-on** (or **Test deployment** / **Internal** depending on your Workspace).
-   - Restrict the add-on to your Google Workspace domain. See **`google-addon/README.md`** in the repo for more detail.
+   - Restrict the add-on to your Google Workspace domain so only your users see it in Gmail. For step-by-step deployment (test vs internal/domain-wide), see **`google-addon/README.md`** in the repo.
 
 4. **Multi-tenant (optional)**  
    If you have multiple tenants (e.g. different domains), the add-on can send which tenant the report belongs to. In the webhook request from the add-on, include the header:  
@@ -305,7 +307,8 @@ Feature tests cover: auth and dashboard access, webhook (signature, unknown tena
 
 ## Logo and branding
 
-Place your logo at `public/images/cyberguard-logo.png`. For the Gmail add-on icon, set the deployed logo URL in `google-addon/appsscript.json` (`logoUrl`).
+- **Admin app:** Place your logo at `public/images/cyberguard-logo.png`.
+- **Gmail add-on (shield icon):** In `google-addon/appsscript.json`, set **`logoUrl`** to a publicly accessible URL of your shield or report-phish icon (e.g. `https://your-domain.com/images/report-phish-shield.png`). Users will see this icon next to "CyberGuard Report Phish" in Gmail.
 
 ---
 
