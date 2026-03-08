@@ -2,7 +2,7 @@
 
 [![PHP 8.2](https://img.shields.io/badge/PHP-8.2-777BB4?logo=php&logoColor=white)](https://www.php.net/)
 [![Laravel 12](https://img.shields.io/badge/Laravel-12-FF2D20?logo=laravel&logoColor=white)](https://laravel.com/)
-[![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](https://opensource.org/licenses/MIT)
+[![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
 [![Google Workspace](https://img.shields.io/badge/Made%20for-Google%20Workspace-4285F4?logo=google&logoColor=white)](https://workspace.google.com/)
 
 Production-ready internal phishing awareness platform for **authorized security awareness testing on your own Google Workspace domain only**.
