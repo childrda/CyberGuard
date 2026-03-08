@@ -49,7 +49,14 @@ class CampaignController extends Controller
             'display_name' => ['nullable', 'string'],
             'attack_ids' => ['nullable', 'array'],
             'attack_ids.*' => ['exists:phishing_attacks,id'],
+            'window_start' => ['nullable', 'date'],
+            'window_end' => ['nullable', 'date', 'after_or_equal:window_start'],
+            'emails_per_recipient' => ['nullable', 'integer', 'min:1', 'max:50'],
         ]);
+        if (($validated['window_start'] ?? null) xor ($validated['window_end'] ?? null)) {
+            $validated['window_start'] = null;
+            $validated['window_end'] = null;
+        }
 
         $campaign = PhishingCampaign::create([
             'tenant_id' => \App\Models\Tenant::currentId(),
@@ -57,6 +64,9 @@ class CampaignController extends Controller
             'template_id' => $validated['template_id'],
             'status' => 'draft',
             'created_by' => auth()->id(),
+            'window_start' => $validated['window_start'] ?? null,
+            'window_end' => $validated['window_end'] ?? null,
+            'emails_per_recipient' => $validated['emails_per_recipient'] ?? 1,
         ]);
 
         PhishingCampaignTarget::create([
@@ -98,11 +108,21 @@ class CampaignController extends Controller
             'template_id' => ['required', 'exists:phishing_templates,id'],
             'attack_ids' => ['nullable', 'array'],
             'attack_ids.*' => ['exists:phishing_attacks,id'],
+            'window_start' => ['nullable', 'date'],
+            'window_end' => ['nullable', 'date', 'after_or_equal:window_start'],
+            'emails_per_recipient' => ['nullable', 'integer', 'min:1', 'max:50'],
         ]);
-        $old = $campaign->only(['name', 'template_id']);
+        if (($validated['window_start'] ?? null) xor ($validated['window_end'] ?? null)) {
+            $validated['window_start'] = null;
+            $validated['window_end'] = null;
+        }
+        $old = $campaign->only(['name', 'template_id', 'window_start', 'window_end', 'emails_per_recipient']);
         $campaign->update([
             'name' => $validated['name'],
             'template_id' => $validated['template_id'],
+            'window_start' => $validated['window_start'] ?? null,
+            'window_end' => $validated['window_end'] ?? null,
+            'emails_per_recipient' => $validated['emails_per_recipient'] ?? 1,
         ]);
         $attackIds = PhishingAttack::whereIn('id', $request->input('attack_ids', []))->pluck('id')->toArray();
         $campaign->attacks()->sync($attackIds);
@@ -137,8 +157,11 @@ class CampaignController extends Controller
         $this->authorize('launch', $campaign);
         $result = $this->campaignService->launchCampaign($campaign);
         if ($result['ok']) {
-            return redirect()->route('admin.campaigns.show', $campaign)
-                ->with('success', "Campaign launched. Accepted: {$result['accepted']}, Rejected: {$result['rejected']}.");
+            $msg = "Campaign launched. Recipients: {$result['accepted']}, Rejected: {$result['rejected']}.";
+            if (! empty($result['scheduled_over_window'])) {
+                $msg .= " {$result['total_messages']} message(s) will be sent over the selected window (run scheduler: php artisan phishing:send-scheduled).";
+            }
+            return redirect()->route('admin.campaigns.show', $campaign)->with('success', $msg);
         }
         return redirect()->route('admin.campaigns.show', $campaign)
             ->with('error', $result['error'] ?? 'Launch failed.');

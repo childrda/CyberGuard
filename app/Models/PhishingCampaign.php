@@ -29,6 +29,9 @@ class PhishingCampaign extends Model
         'approved_by',
         'approved_at',
         'approval_notes',
+        'window_start',
+        'window_end',
+        'emails_per_recipient',
     ];
 
     protected function casts(): array
@@ -38,6 +41,8 @@ class PhishingCampaign extends Model
             'started_at' => 'datetime',
             'completed_at' => 'datetime',
             'approved_at' => 'datetime',
+            'window_start' => 'date',
+            'window_end' => 'date',
             'allowed_domains' => 'array',
             'randomize_send_times' => 'boolean',
         ];

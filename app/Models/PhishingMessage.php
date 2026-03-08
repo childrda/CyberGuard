@@ -19,6 +19,7 @@ class PhishingMessage extends Model
         'message_id',
         'status',
         'queued_at',
+        'scheduled_for',
         'sent_at',
         'delivered_at',
         'failure_reason',
@@ -28,6 +29,7 @@ class PhishingMessage extends Model
     {
         return [
             'queued_at' => 'datetime',
+            'scheduled_for' => 'datetime',
             'sent_at' => 'datetime',
             'delivered_at' => 'datetime',
         ];

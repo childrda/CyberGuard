@@ -41,12 +41,32 @@
                 <li>{{ $t->target_type }}: {{ $t->target_identifier }} @if($t->display_name)({{ $t->display_name }})@endif</li>
             @endforeach
         </ul>
+        @if($campaign->window_start && $campaign->window_end)
+            <p class="mt-3 text-sm text-slate-600"><strong>Send window:</strong> {{ $campaign->window_start->format('M j, Y') }} – {{ $campaign->window_end->format('M j, Y') }}</p>
+            <p class="text-sm text-slate-600"><strong>Emails per recipient:</strong> {{ $campaign->emails_per_recipient ?? 1 }}</p>
+        @endif
     </div>
     <div class="rounded-lg border border-slate-200 bg-white p-6">
         <h2 class="font-semibold mb-2">Stats</h2>
-        <p>Messages: {{ $campaign->messages->count() }}</p>
-        <p>Sent: {{ $campaign->messages->where('status', 'sent')->count() }}</p>
-        <p>Clicks: {{ $campaign->messages->flatMap->events->where('event_type', 'clicked')->count() }}</p>
+        @php
+            $total = $campaign->messages->count();
+            $sent = $campaign->messages->where('status', 'sent')->count();
+            $scheduled = $campaign->messages->where('status', 'scheduled')->count();
+            $queued = $campaign->messages->where('status', 'queued')->count();
+            $failed = $campaign->messages->where('status', 'failed')->count();
+        @endphp
+        <p>Total messages: {{ $total }}</p>
+        <p>Sent: {{ $sent }}</p>
+        @if($scheduled > 0)
+            <p>Scheduled (to send in window): {{ $scheduled }}</p>
+        @endif
+        @if($queued > 0)
+            <p>Queued: {{ $queued }}</p>
+        @endif
+        @if($failed > 0)
+            <p class="text-red-600">Failed: {{ $failed }}</p>
+        @endif
+        <p class="mt-2">Clicks: {{ $campaign->messages->flatMap->events->where('event_type', 'clicked')->count() }}</p>
         <p>Reports: {{ $campaign->messages->flatMap->events->where('event_type', 'reported')->count() }}</p>
     </div>
 </div>
@@ -58,6 +78,7 @@
             <tr>
                 <th class="px-4 py-2 text-left text-sm font-medium text-slate-700">Recipient</th>
                 <th class="px-4 py-2 text-left text-sm font-medium text-slate-700">Status</th>
+                <th class="px-4 py-2 text-left text-sm font-medium text-slate-700">Scheduled for</th>
                 <th class="px-4 py-2 text-left text-sm font-medium text-slate-700">Sent at</th>
                 <th class="px-4 py-2 text-left text-sm font-medium text-slate-700">Events</th>
             </tr>
@@ -67,8 +88,9 @@
                 <tr>
                     <td class="px-4 py-2">{{ $m->recipient_email }}</td>
                     <td class="px-4 py-2">{{ $m->status }}</td>
-                    <td class="px-4 py-2">{{ $m->sent_at ? $m->sent_at->toDateTimeString() : '-' }}</td>
-                    <td class="px-4 py-2">{{ $m->events->pluck('event_type')->unique()->join(', ') ?: '-' }}</td>
+                    <td class="px-4 py-2">{{ $m->scheduled_for ? $m->scheduled_for->toDateTimeString() : '—' }}</td>
+                    <td class="px-4 py-2">{{ $m->sent_at ? $m->sent_at->toDateTimeString() : '—' }}</td>
+                    <td class="px-4 py-2">{{ $m->events->pluck('event_type')->unique()->join(', ') ?: '—' }}</td>
                 </tr>
             @endforeach
         </tbody>

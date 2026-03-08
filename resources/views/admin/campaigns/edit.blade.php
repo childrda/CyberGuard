@@ -40,6 +40,24 @@
             @endforelse
         </div>
     </div>
+    <div class="rounded-lg border border-slate-200 bg-slate-50 p-4">
+        <h3 class="text-sm font-semibold text-slate-700 mb-2">Send window (optional)</h3>
+        <p class="text-sm text-slate-600 mb-3">Set a date range to spread emails over time. Only applies when launching; leave blank to send one per recipient immediately.</p>
+        <div class="grid grid-cols-2 gap-4">
+            <div>
+                <label class="block text-sm font-medium text-slate-700">From date</label>
+                <input type="date" name="window_start" value="{{ old('window_start', $campaign->window_start?->format('Y-m-d')) }}" class="mt-1 w-full rounded border-slate-300">
+            </div>
+            <div>
+                <label class="block text-sm font-medium text-slate-700">To date</label>
+                <input type="date" name="window_end" value="{{ old('window_end', $campaign->window_end?->format('Y-m-d')) }}" class="mt-1 w-full rounded border-slate-300">
+            </div>
+        </div>
+        <div class="mt-3">
+            <label class="block text-sm font-medium text-slate-700">Emails per recipient (during window)</label>
+            <input type="number" name="emails_per_recipient" value="{{ old('emails_per_recipient', $campaign->emails_per_recipient ?? 1) }}" min="1" max="50" class="mt-1 w-full rounded border-slate-300 w-24">
+        </div>
+    </div>
     <button type="submit" class="rounded bg-slate-800 px-4 py-2 text-white">Update</button>
 </form>
 @endsection
