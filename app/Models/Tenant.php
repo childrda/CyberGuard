@@ -71,10 +71,10 @@ class Tenant extends Model
         return $this->remediation_policy === 'auto_remove_confirmed_phish';
     }
 
-    public static function currentId(): ?int
-    {
-        return app('current_tenant_id');
-    }
+public static function currentId(): ?int
+{
+    return request()->attributes->get('current_tenant_id');
+}
 
     public static function current(): ?self
     {
