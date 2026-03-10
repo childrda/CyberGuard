@@ -1,0 +1,2 @@
+Add a screenshot of the CyberGuard dashboard or Gmail Report Phish add-on here.
+Rename to demo.png (or demo-screenshot.png) and reference it in README as docs/demo.png

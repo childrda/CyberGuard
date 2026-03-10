@@ -1,0 +1,40 @@
+{
+  "timeZone": "America/New_York",
+  "dependencies": {},
+  "exceptionLogging": "STACKDRIVER",
+  "oauthScopes": [
+    "https://www.googleapis.com/auth/gmail.readonly",
+    "https://www.googleapis.com/auth/gmail.addons.current.message.readonly",
+    "https://www.googleapis.com/auth/script.external_request"
+  ],
+  "gmail": {
+    "name": "CyberGuard Report Phish",
+    "logoUrl": "https://raw.githubusercontent.com/childrda/CyberGuard/main/docs/logo.png",
+    "primaryColor": "#4285F4",
+    "secondaryColor": "#34A853",
+    "contextualTriggers": [
+      {
+        "unconditional": {},
+        "onTriggerFunction": "buildAddOn"
+      }
+    ],
+    "composeTrigger": {
+      "selectActions": [],
+      "draftAccess": "NONE"
+    },
+    "universalActions": [
+      {
+        "text": "Report Phish",
+        "runFunction": "reportPhish"
+      },
+      {
+        "text": "Report Spam",
+        "runFunction": "reportSpam"
+      },
+      {
+        "text": "Mark as Safe / False Positive",
+        "runFunction": "markAsSafe"
+      }
+    ]
+  }
+}
