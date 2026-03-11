@@ -3,9 +3,12 @@
 namespace App\Http\Controllers\Admin;
 
 use App\Http\Controllers\Controller;
+use App\Jobs\SendPhishingSimulationJob;
 use App\Models\PhishingAttack;
 use App\Models\PhishingCampaign;
 use App\Models\PhishingCampaignTarget;
+use App\Models\PhishingEvent;
+use App\Models\PhishingMessage;
 use App\Models\PhishingTemplate;
 use App\Services\AuditService;
 use App\Services\PhishingCampaignService;
@@ -225,5 +228,34 @@ class CampaignController extends Controller
         $this->campaignService->cancelCampaign($campaign);
         return redirect()->route('admin.campaigns.show', $campaign)
             ->with('success', 'Campaign cancelled. You can edit it (including targets), re-approve, and launch again.');
+    }
+
+    /**
+     * Requeue failed messages for this campaign so they are sent again.
+     */
+    public function retryFailed(PhishingCampaign $campaign): RedirectResponse
+    {
+        $this->authorize('update', $campaign);
+        $messages = PhishingMessage::where('campaign_id', $campaign->id)->where('status', 'failed')->get();
+        if ($messages->isEmpty()) {
+            return redirect()->route('admin.campaigns.show', $campaign)
+                ->with('info', 'No failed messages to retry.');
+        }
+        foreach ($messages as $msg) {
+            $msg->update([
+                'status' => 'queued',
+                'queued_at' => now(),
+                'failure_reason' => null,
+            ]);
+            PhishingEvent::create([
+                'message_id' => $msg->id,
+                'event_type' => 'queued',
+                'metadata' => ['retry' => true],
+                'occurred_at' => now(),
+            ]);
+            SendPhishingSimulationJob::dispatch($msg);
+        }
+        return redirect()->route('admin.campaigns.show', $campaign)
+            ->with('success', 'Requeued ' . $messages->count() . ' failed message(s). They will be sent when the queue worker runs.');
     }
 }

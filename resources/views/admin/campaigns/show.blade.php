@@ -71,6 +71,12 @@
         @endif
         @if($failed > 0)
             <p class="text-red-400">Failed: {{ $failed }}</p>
+            @can('update', $campaign)
+                <form method="post" action="{{ route('admin.campaigns.retry-failed', $campaign) }}" class="inline mt-2">
+                    @csrf
+                    <button type="submit" class="rounded border border-amber-600 bg-amber-900/40 px-3 py-1.5 text-sm text-amber-300 hover:bg-amber-900/60">Retry failed</button>
+                </form>
+            @endcan
         @endif
         <p class="mt-2 text-slate-300">Clicks: {{ $campaign->messages->flatMap->events->where('event_type', 'clicked')->count() }}</p>
         <p class="text-slate-300">Reports: {{ $campaign->messages->flatMap->events->where('event_type', 'reported')->count() }}</p>

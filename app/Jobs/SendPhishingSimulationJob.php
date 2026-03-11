@@ -84,17 +84,22 @@ class SendPhishingSimulationJob implements ShouldQueue
                 'occurred_at' => now(),
             ]);
         } catch (\Throwable $e) {
+            $message = $e->getMessage();
+            $failureReason = $message;
+            if (str_contains($message, '421') || str_contains($message, 'Try again later')) {
+                $failureReason = 'Google SMTP temporarily rejected the connection (421 Try again later). Wait a few minutes and use Retry failed, or check Workspace SMTP relay settings and allowlisted IPs: https://support.google.com/a/answer/3221692';
+            }
             $msg->update([
                 'status' => 'failed',
-                'failure_reason' => $e->getMessage(),
+                'failure_reason' => $failureReason,
             ]);
             PhishingEvent::create([
                 'message_id' => $msg->id,
                 'event_type' => 'failed',
-                'metadata' => ['error' => $e->getMessage()],
+                'metadata' => ['error' => $message],
                 'occurred_at' => now(),
             ]);
-            throw $e;
+            // Don't rethrow: message is marked failed; job completes so retry-failed and queue worker don't crash
         }
     }
 }

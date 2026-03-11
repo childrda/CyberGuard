@@ -138,6 +138,14 @@
         ous: @json(route('admin.workspace.ous')),
         resolve: @json(route('admin.workspace.resolve')),
     };
+    @php
+        $oldWorkspaceData = [
+            'target_type' => old('target_type'),
+            'workspace_groups' => old('workspace_groups', []),
+            'workspace_ous' => old('workspace_ous', []),
+        ];
+    @endphp
+    const oldWorkspace = @json($oldWorkspaceData);
 
     const targetType = document.getElementById('target_type');
     const targetSingleWrap = document.getElementById('target_single_wrap');
@@ -157,6 +165,12 @@
     let selectedGroupOu = new Set(); // keys: type:emailOrPath
     let resolvedEmails = []; // { email, name }
     let selectedEmails = new Set();
+
+    if (oldWorkspace && (oldWorkspace.target_type === 'group' || oldWorkspace.target_type === 'ou')) {
+        (oldWorkspace.workspace_groups || []).forEach(function(g) { if (g) selectedGroupOu.add('group:' + g); });
+        (oldWorkspace.workspace_ous || []).forEach(function(o) { if (o) selectedGroupOu.add('ou:' + o); });
+        if (selectedGroupOu.size > 0 && targetType) targetType.value = oldWorkspace.target_type;
+    }
 
     function showWorkspaceOrSingle() {
         const isGroupOu = targetType.value === 'group' || targetType.value === 'ou';
@@ -181,6 +195,8 @@
             const ous = (ousRes.ous || []).map(o => ({ type: 'ou', emailOrPath: o.path, name: o.name }));
             allItems = [...groups, ...ous];
             renderWorkspaceList();
+            resolveAndShowEmails();
+            syncWorkspaceHiddenInputs();
         }).catch(() => {
             allItems = [];
             renderWorkspaceList();
@@ -211,10 +227,27 @@
                 const k = this.dataset.key;
                 if (this.checked) selectedGroupOu.add(k); else selectedGroupOu.delete(k);
                 updateWorkspaceSelectAll();
+                syncWorkspaceHiddenInputs();
                 resolveAndShowEmails();
             });
         });
         updateWorkspaceSelectAll();
+        syncWorkspaceHiddenInputs();
+    }
+
+    function syncWorkspaceHiddenInputs() {
+        workspaceHiddenInputs.innerHTML = '';
+        selectedGroupOu.forEach(k => {
+            const idx = k.indexOf(':');
+            const type = idx >= 0 ? k.substring(0, idx) : '';
+            const val = idx >= 0 ? k.substring(idx + 1) : k;
+            const name = type === 'group' ? 'workspace_groups[]' : 'workspace_ous[]';
+            const input = document.createElement('input');
+            input.type = 'hidden';
+            input.name = name;
+            input.value = val;
+            workspaceHiddenInputs.appendChild(input);
+        });
     }
 
     function updateWorkspaceSelectAll() {
@@ -233,6 +266,7 @@
             if (this.checked) selectedGroupOu.add(key(item)); else selectedGroupOu.delete(key(item));
         });
         renderWorkspaceList();
+        syncWorkspaceHiddenInputs();
         resolveAndShowEmails();
     });
 
@@ -320,18 +354,7 @@
                 alert('Select at least one user group or OU.');
                 return;
             }
-            workspaceHiddenInputs.innerHTML = '';
-            selectedGroupOu.forEach(k => {
-                const idx = k.indexOf(':');
-                const type = idx >= 0 ? k.substring(0, idx) : '';
-                const val = idx >= 0 ? k.substring(idx + 1) : k;
-                const name = type === 'group' ? 'workspace_groups[]' : 'workspace_ous[]';
-                const input = document.createElement('input');
-                input.type = 'hidden';
-                input.name = name;
-                input.value = val;
-                workspaceHiddenInputs.appendChild(input);
-            });
+            syncWorkspaceHiddenInputs();
         }
     });
 
