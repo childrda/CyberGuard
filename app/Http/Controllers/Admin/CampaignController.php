@@ -44,7 +44,7 @@ class CampaignController extends Controller
         $validated = $request->validate([
             'name' => ['required', 'string', 'max:255'],
             'template_id' => ['required', 'exists:phishing_templates,id'],
-            'target_type' => ['required', 'in:user,group,csv'],
+            'target_type' => ['required', 'in:user,group,ou,csv'],
             'target_identifier' => ['required', 'string'],
             'display_name' => ['nullable', 'string'],
             'attack_ids' => ['nullable', 'array'],
@@ -96,14 +96,16 @@ class CampaignController extends Controller
         $this->authorize('update', $campaign);
         $templates = PhishingTemplate::where('active', true)->get();
         $attacks = PhishingAttack::where('active', true)->orderBy('difficulty_rating')->orderBy('name')->get();
-        $campaign->load('attacks');
-        return view('admin.campaigns.edit', compact('campaign', 'templates', 'attacks'));
+        $campaign->load('attacks', 'targets');
+        $canEditTargets = $campaign->messages()->count() === 0;
+        return view('admin.campaigns.edit', compact('campaign', 'templates', 'attacks', 'canEditTargets'));
     }
 
     public function update(Request $request, PhishingCampaign $campaign): RedirectResponse
     {
         $this->authorize('update', $campaign);
-        $validated = $request->validate([
+        $canEditTargets = $campaign->messages()->count() === 0;
+        $rules = [
             'name' => ['required', 'string', 'max:255'],
             'template_id' => ['required', 'exists:phishing_templates,id'],
             'attack_ids' => ['nullable', 'array'],
@@ -111,7 +113,13 @@ class CampaignController extends Controller
             'window_start' => ['nullable', 'date'],
             'window_end' => ['nullable', 'date', 'after_or_equal:window_start'],
             'emails_per_recipient' => ['nullable', 'integer', 'min:1', 'max:50'],
-        ]);
+        ];
+        if ($canEditTargets) {
+            $rules['target_type'] = ['required', 'in:user,group,ou,csv'];
+            $rules['target_identifier'] = ['required', 'string'];
+            $rules['display_name'] = ['nullable', 'string'];
+        }
+        $validated = $request->validate($rules);
         if (($validated['window_start'] ?? null) xor ($validated['window_end'] ?? null)) {
             $validated['window_start'] = null;
             $validated['window_end'] = null;
@@ -126,6 +134,15 @@ class CampaignController extends Controller
         ]);
         $attackIds = PhishingAttack::whereIn('id', $request->input('attack_ids', []))->pluck('id')->toArray();
         $campaign->attacks()->sync($attackIds);
+        if ($canEditTargets) {
+            $campaign->targets()->delete();
+            PhishingCampaignTarget::create([
+                'campaign_id' => $campaign->id,
+                'target_type' => $validated['target_type'],
+                'target_identifier' => $validated['target_identifier'],
+                'display_name' => $validated['display_name'] ?? null,
+            ]);
+        }
         $this->audit->log('campaign_updated', $campaign, $old, $validated);
         return redirect()->route('admin.campaigns.show', $campaign)->with('success', 'Campaign updated.');
     }
@@ -165,5 +182,13 @@ class CampaignController extends Controller
         }
         return redirect()->route('admin.campaigns.show', $campaign)
             ->with('error', $result['error'] ?? 'Launch failed.');
+    }
+
+    public function cancel(PhishingCampaign $campaign): RedirectResponse
+    {
+        $this->authorize('cancel', $campaign);
+        $this->campaignService->cancelCampaign($campaign);
+        return redirect()->route('admin.campaigns.show', $campaign)
+            ->with('success', 'Campaign cancelled. You can edit it (including targets), re-approve, and launch again.');
     }
 }

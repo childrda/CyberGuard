@@ -56,6 +56,21 @@ class Tenant extends Model
         return $this->hasMany(ShieldPointsLedger::class, 'tenant_id');
     }
 
+    public function scorePeriods(): HasMany
+    {
+        return $this->hasMany(ScorePeriod::class, 'tenant_id');
+    }
+
+    public function badges(): HasMany
+    {
+        return $this->hasMany(Badge::class, 'tenant_id');
+    }
+
+    public function challenges(): HasMany
+    {
+        return $this->hasMany(Challenge::class, 'tenant_id');
+    }
+
     public function isReportOnly(): bool
     {
         return $this->remediation_policy === 'report_only';

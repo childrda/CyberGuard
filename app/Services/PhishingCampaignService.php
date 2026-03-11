@@ -37,6 +37,7 @@ class PhishingCampaignService
             match ($target->target_type) {
                 'user' => $emails[] = ['email' => $target->target_identifier, 'name' => $target->display_name],
                 'group' => $emails = array_merge($emails, $this->resolveGroup($campaign, $target->target_identifier)),
+                'ou' => $emails = array_merge($emails, $this->resolveOu($campaign, $target->target_identifier)),
                 'csv' => $emails = array_merge($emails, $this->resolveCsvTarget($target)),
                 default => null,
             };
@@ -64,6 +65,19 @@ class PhishingCampaignService
             return [];
         }
         return $this->googleGroupService->listGroupMemberEmails($tenant, $groupEmail);
+    }
+
+    /**
+     * Resolve a Google Workspace OU (organizational unit) to individual user emails.
+     * target_identifier is the org unit path (e.g. /Staff or /Students).
+     */
+    private function resolveOu(PhishingCampaign $campaign, string $orgUnitPath): array
+    {
+        $tenant = $campaign->tenant;
+        if (! $tenant) {
+            return [];
+        }
+        return $this->googleGroupService->listUserEmailsInOu($tenant, $orgUnitPath);
     }
 
     private function resolveCsvTarget(PhishingCampaignTarget $target): array
@@ -190,5 +204,24 @@ class PhishingCampaignService
     public function generateTrackingToken(): string
     {
         return Str::random(64);
+    }
+
+    /**
+     * Cancel a launched campaign: remove all messages and reset to draft so it can be edited (including targets) and re-approved/launched.
+     */
+    public function cancelCampaign(PhishingCampaign $campaign): void
+    {
+        if (! in_array($campaign->status, ['sending', 'completed', 'scheduled', 'approved'], true)) {
+            return;
+        }
+        $campaign->messages()->delete();
+        $campaign->update([
+            'status' => 'draft',
+            'approved_by' => null,
+            'approved_at' => null,
+            'approval_notes' => null,
+            'started_at' => null,
+        ]);
+        $this->audit->log('campaign_cancelled', $campaign);
     }
 }

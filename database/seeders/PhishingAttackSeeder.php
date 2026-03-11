@@ -14,8 +14,38 @@ class PhishingAttackSeeder extends Seeder
         if (! $tenant) {
             return;
         }
+        $this->seedAttacksForTenant($tenant);
+    }
 
-        $attacks = [
+    /**
+     * Seed default attack templates for a tenant (e.g. when creating a new tenant).
+     */
+    public function seedAttacksForTenant(Tenant $tenant): void
+    {
+        $attacks = self::defaultAttacks();
+
+        foreach ($attacks as $a) {
+            PhishingAttack::withoutGlobalScope('tenant')->firstOrCreate(
+                [
+                    'tenant_id' => $tenant->id,
+                    'name' => $a['name'],
+                ],
+                array_merge($a, [
+                    'tenant_id' => $tenant->id,
+                    'times_sent' => 0,
+                    'times_clicked' => 0,
+                    'active' => true,
+                ])
+            );
+        }
+    }
+
+    /**
+     * @return array<int, array<string, mixed>>
+     */
+    public static function defaultAttacks(): array
+    {
+        return [
             // Difficulty 1 – Obvious
             [
                 'name' => 'Obvious typo account suspension',
@@ -176,20 +206,5 @@ class PhishingAttackSeeder extends Seeder
                 'landing_page_type' => 'training',
             ],
         ];
-
-        foreach ($attacks as $a) {
-            PhishingAttack::withoutGlobalScope('tenant')->firstOrCreate(
-                [
-                    'tenant_id' => $tenant->id,
-                    'name' => $a['name'],
-                ],
-                array_merge($a, [
-                    'tenant_id' => $tenant->id,
-                    'times_sent' => 0,
-                    'times_clicked' => 0,
-                    'active' => true,
-                ])
-            );
-        }
     }
 }

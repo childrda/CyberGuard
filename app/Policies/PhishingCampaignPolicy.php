@@ -27,7 +27,8 @@ class PhishingCampaignPolicy
         if (! $user->hasAnyRole(['superadmin', 'campaign_admin'])) {
             return false;
         }
-        return in_array($campaign->status, ['draft', 'paused']);
+        // Allow edit while draft, paused, approved, or scheduled (before/during setup). Not while sending or completed.
+        return in_array($campaign->status, ['draft', 'paused', 'approved', 'scheduled']);
     }
 
     public function delete(User $user, PhishingCampaign $campaign): bool
@@ -38,7 +39,7 @@ class PhishingCampaignPolicy
     public function approve(User $user, PhishingCampaign $campaign): bool
     {
         return $user->hasAnyRole(['superadmin', 'campaign_admin'])
-            && $campaign->status === 'pending_approval';
+            && in_array($campaign->status, ['draft', 'pending_approval']);
     }
 
     public function launch(User $user, PhishingCampaign $campaign): bool
@@ -46,5 +47,14 @@ class PhishingCampaignPolicy
         return $user->canLaunchCampaigns()
             && in_array($campaign->status, ['approved', 'scheduled', 'paused'])
             && config('phishing.simulation_enabled', false);
+    }
+
+    /**
+     * Cancel a launched campaign so it can be edited (including targets) and re-approved/launched.
+     */
+    public function cancel(User $user, PhishingCampaign $campaign): bool
+    {
+        return $user->hasAnyRole(['superadmin', 'campaign_admin'])
+            && in_array($campaign->status, ['sending', 'completed', 'scheduled', 'approved']);
     }
 }

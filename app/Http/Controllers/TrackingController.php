@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Models\PhishingEvent;
 use App\Models\PhishingMessage;
+use App\Services\Gamification\PointsService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Log;
 
@@ -38,6 +39,8 @@ class TrackingController extends Controller
             'metadata' => ['redirect_to' => $redirectUrl],
             'occurred_at' => now(),
         ]);
+
+        $this->awardNegativePointsForInteraction($message, 'clicked');
 
         return redirect()->away($redirectUrl);
     }
@@ -84,6 +87,8 @@ class TrackingController extends Controller
             'occurred_at' => now(),
         ]);
 
+        $this->awardNegativePointsForInteraction($message, 'submitted');
+
         return redirect()->route('training.thanks');
     }
 
@@ -119,5 +124,28 @@ class TrackingController extends Controller
     private function fallbackRedirect(Request $request)
     {
         return redirect()->to(config('app.url').'/training/unknown');
+    }
+
+    private function awardNegativePointsForInteraction(PhishingMessage $message, string $eventType): void
+    {
+        $message->load('campaign');
+        $campaign = $message->campaign;
+        $tenantId = $campaign->tenant_id ?? null;
+        if ($tenantId === null) {
+            return;
+        }
+        $points = $eventType === 'clicked'
+            ? config('phishing.scoring.clicked', -10)
+            : config('phishing.scoring.submitted', -25);
+        if ($points >= 0) {
+            return;
+        }
+        app(PointsService::class)->award(
+            $tenantId,
+            $message->recipient_email,
+            $eventType,
+            $points,
+            ['reason' => $eventType === 'clicked' ? 'Clicked link in simulation' : 'Submitted on simulation page']
+        );
     }
 }

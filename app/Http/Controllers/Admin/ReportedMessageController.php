@@ -77,15 +77,20 @@ class ReportedMessageController extends Controller
 
         $tenant = $reported->tenant;
         if ($tenant && $reported->reporter_email) {
+            $points = config('phishing.scoring.reported_phish', 50);
             app(\App\Services\ShieldPointsService::class)->award(
                 $tenant->id,
                 $reported->reporter_email,
                 'reported_phish',
-                10,
+                $points,
                 'Reported real phishing (analyst confirmed)',
                 null,
                 $reported->id,
                 null
+            );
+            app(\App\Services\Gamification\BadgeService::class)->evaluateForUser(
+                $tenant->id,
+                $reported->reporter_email
             );
         }
 

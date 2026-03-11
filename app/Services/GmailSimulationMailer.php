@@ -27,14 +27,20 @@ class GmailSimulationMailer
             return ['message_id' => null, 'skipped' => true];
         }
 
+        // Google Workspace SMTP relay only accepts MAIL FROM in your domain. Use the app's
+        // allowed From address so relay works; show the simulation "sender" in the display name.
+        $envelopeFrom = config('mail.from.address');
+        $displayName = $fromName ?: config('mail.from.name');
+        if ($fromEmail && $fromEmail !== $envelopeFrom) {
+            $displayName = trim($displayName . ' <' . $fromEmail . '>');
+        }
+
         // TODO: Integrate Gmail API with service account. For now use Laravel Mail.
         try {
-            $fromEmail = $fromEmail ?: config('mail.from.address');
-            $fromName = $fromName ?: config('mail.from.name');
-            \Illuminate\Support\Facades\Mail::raw($textBody ?? strip_tags($htmlBody), function ($message) use ($to, $subject, $htmlBody, $fromName, $fromEmail, $replyTo) {
+            \Illuminate\Support\Facades\Mail::raw($textBody ?? strip_tags($htmlBody), function ($message) use ($to, $subject, $htmlBody, $displayName, $envelopeFrom, $replyTo) {
                 $message->to($to)
                     ->subject($subject)
-                    ->from($fromEmail, $fromName)
+                    ->from($envelopeFrom, $displayName)
                     ->html($htmlBody);
                 if ($replyTo) {
                     $message->replyTo($replyTo);

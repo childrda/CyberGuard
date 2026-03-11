@@ -136,15 +136,20 @@ class ReportWebhookController extends Controller
         }
 
         if ($tenant && $phishingMessage) {
+            $points = config('phishing.scoring.simulation_reported', 50);
             app(\App\Services\ShieldPointsService::class)->award(
                 $tenant->id,
                 $reporterEmail,
                 'simulation_reported',
-                10,
+                $points,
                 'Reported simulation',
                 $phishingMessage->campaign_id ?? null,
                 $reported->id,
                 null
+            );
+            app(\App\Services\Gamification\BadgeService::class)->evaluateForUser(
+                $tenant->id,
+                $reporterEmail
             );
         }
 

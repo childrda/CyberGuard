@@ -34,8 +34,10 @@ class SetCurrentTenant
 
         if ($tenant && $tenant->active) {
             app()->instance('current_tenant_id', $tenant->id);
+            $request->attributes->set('current_tenant_id', $tenant->id);
         } else {
             app()->instance('current_tenant_id', null);
+            $request->attributes->set('current_tenant_id', null);
         }
 
         return $next($request);

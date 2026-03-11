@@ -40,6 +40,18 @@ return [
 
     /*
     |--------------------------------------------------------------------------
+    | Blocked target domains (high-risk / never send)
+    |--------------------------------------------------------------------------
+    | Simulation emails are never sent to these domains, even if in allowed list.
+    | Defaults include consumer email and common government TLDs. Override via
+    | PHISHING_BLOCKED_DOMAINS (comma-separated) or leave empty to use defaults.
+    */
+    'blocked_target_domains' => array_filter(
+        explode(',', env('PHISHING_BLOCKED_DOMAINS', 'gmail.com,googlemail.com,yahoo.com,yahoo.co.uk,outlook.com,hotmail.com,hotmail.co.uk,live.com,icloud.com,me.com,mac.com,aol.com,mail.com,protonmail.com,proton.me,.gov,.gov.uk,.mil'))
+    ),
+
+    /*
+    |--------------------------------------------------------------------------
     | Default from domain
     |--------------------------------------------------------------------------
     */
@@ -86,4 +98,18 @@ return [
     | We never store real passwords. Only record that a submission occurred.
     */
     'credential_capture_placeholder' => 'submitted',
+
+    /*
+    |--------------------------------------------------------------------------
+    | Scoring (gamification point deltas)
+    |--------------------------------------------------------------------------
+    | Vision-aligned defaults: reward reporting and training; small penalty for click/submit.
+    */
+    'scoring' => [
+        'simulation_reported' => (int) env('PHISHING_SCORE_SIMULATION_REPORTED', 50),
+        'reported_phish' => (int) env('PHISHING_SCORE_REPORTED_PHISH', 50),
+        'training_completed' => (int) env('PHISHING_SCORE_TRAINING_COMPLETED', 100),
+        'clicked' => (int) env('PHISHING_SCORE_CLICKED', -10),
+        'submitted' => (int) env('PHISHING_SCORE_SUBMITTED', -25),
+    ],
 ];

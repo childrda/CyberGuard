@@ -3,29 +3,52 @@
 namespace App\Http\Controllers\Admin;
 
 use App\Http\Controllers\Controller;
-use App\Models\ShieldPointsLedger;
+use App\Models\ScorePeriod;
+use App\Models\Tenant;
+use App\Services\Gamification\LeaderboardService;
 use Illuminate\Http\Request;
 use Illuminate\View\View;
 
 class LeaderboardController extends Controller
 {
+    public function __construct(
+        protected LeaderboardService $leaderboard
+    ) {}
+
     public function index(Request $request): View
     {
-        $month = $request->input('month', now()->format('Y-m'));
-        $start = $month.'-01 00:00:00';
-        $end = now()->parse($start)->endOfMonth()->format('Y-m-d 23:59:59');
+        $tenantId = Tenant::currentId();
+        $scope = $request->input('scope', 'tenant'); // tenant, department, ou
+        $periodInput = $request->input('period');
+        $scorePeriodId = ($periodInput !== null && $periodInput !== '') ? (int) $periodInput : null;
 
-        $leaderboard = ShieldPointsLedger::query()
-            ->whereBetween('created_at', [$start, $end])
-            ->selectRaw('user_identifier, SUM(points_delta) as total_points')
-            ->groupBy('user_identifier')
-            ->orderByDesc('total_points')
-            ->limit(50)
-            ->get();
+        $periods = $tenantId
+            ? ScorePeriod::withoutGlobalScope('tenant')->where('tenant_id', $tenantId)->orderByDesc('end_date')->limit(20)->get()
+            : collect();
+
+        $leaderboard = [];
+        $periodLabel = 'All time';
+        if ($tenantId !== null) {
+            if ($scorePeriodId) {
+                $p = $periods->firstWhere('id', $scorePeriodId);
+                $periodLabel = $p ? $p->name : 'Period #'.$scorePeriodId;
+            }
+            $limit = 50;
+            if ($scope === 'department') {
+                $leaderboard = $this->leaderboard->departmentLeaderboard($tenantId, $scorePeriodId, $limit);
+            } elseif ($scope === 'ou') {
+                $leaderboard = $this->leaderboard->ouLeaderboard($tenantId, $scorePeriodId, $limit);
+            } else {
+                $leaderboard = $this->leaderboard->tenantLeaderboard($tenantId, $scorePeriodId, $limit);
+            }
+        }
 
         return view('admin.leaderboard.index', [
             'leaderboard' => $leaderboard,
-            'month' => $month,
+            'scope' => $scope,
+            'periods' => $periods,
+            'scorePeriodId' => $scorePeriodId,
+            'periodLabel' => $periodLabel,
         ]);
     }
 }

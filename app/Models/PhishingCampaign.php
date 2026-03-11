@@ -65,7 +65,7 @@ class PhishingCampaign extends Model
 
     public function attacks(): \Illuminate\Database\Eloquent\Relations\BelongsToMany
     {
-        return $this->belongsToMany(PhishingAttack::class, 'campaign_attack')->withTimestamps();
+        return $this->belongsToMany(PhishingAttack::class, 'campaign_attack');
     }
 
     public function creator(): BelongsTo

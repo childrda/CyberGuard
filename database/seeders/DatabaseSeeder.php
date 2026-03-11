@@ -27,6 +27,7 @@ class DatabaseSeeder extends Seeder
             PhishingTemplateSeeder::class,
             PhishingCampaignSeeder::class,
             PhishingAttackSeeder::class,
+            BadgeSeeder::class,
         ]);
     }
 }

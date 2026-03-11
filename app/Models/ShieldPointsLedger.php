@@ -22,6 +22,7 @@ class ShieldPointsLedger extends Model
         'reason',
         'campaign_id',
         'reported_message_id',
+        'score_period_id',
         'created_at',
     ];
 
@@ -43,5 +44,10 @@ class ShieldPointsLedger extends Model
     public function reportedMessage(): BelongsTo
     {
         return $this->belongsTo(ReportedMessage::class, 'reported_message_id');
+    }
+
+    public function scorePeriod(): BelongsTo
+    {
+        return $this->belongsTo(ScorePeriod::class, 'score_period_id');
     }
 }

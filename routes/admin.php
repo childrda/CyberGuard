@@ -5,10 +5,13 @@ use App\Http\Controllers\Admin\AuditLogController;
 use App\Http\Controllers\Admin\CampaignController;
 use App\Http\Controllers\Admin\DashboardController;
 use App\Http\Controllers\Admin\LeaderboardController;
+use App\Http\Controllers\Admin\ScorePeriodController;
 use App\Http\Controllers\Admin\RemediationController;
 use App\Http\Controllers\Admin\ReportedMessageController;
 use App\Http\Controllers\Admin\SettingsController;
+use App\Http\Controllers\Admin\SystemLogController;
 use App\Http\Controllers\Admin\TemplateController;
+use App\Http\Controllers\Admin\TenantController;
 use App\Http\Controllers\Admin\TenantSwitcherController;
 use Illuminate\Support\Facades\Route;
 
@@ -23,14 +26,26 @@ Route::middleware(['auth', 'verified', 'tenant'])->prefix('admin')->name('admin.
         Route::get('/remediation', [RemediationController::class, 'index'])->name('remediation.index');
         Route::get('/remediation/{job}', [RemediationController::class, 'show'])->name('remediation.show');
         Route::get('/campaigns', [CampaignController::class, 'index'])->name('campaigns.index');
+        Route::get('/campaigns/create', [CampaignController::class, 'create'])->name('campaigns.create')->middleware('role:superadmin,campaign_admin');
+        Route::get('/campaigns/{campaign}/edit', [CampaignController::class, 'edit'])->name('campaigns.edit')->middleware('role:superadmin,campaign_admin');
         Route::get('/campaigns/{campaign}', [CampaignController::class, 'show'])->name('campaigns.show');
         Route::get('/templates', [TemplateController::class, 'index'])->name('templates.index');
         Route::get('/templates/{template}', [TemplateController::class, 'show'])->name('templates.show');
         Route::get('/attacks', [AttackController::class, 'index'])->name('attacks.index');
         Route::get('/attacks/{attack}', [AttackController::class, 'show'])->name('attacks.show');
         Route::get('/leaderboard', [LeaderboardController::class, 'index'])->name('leaderboard.index');
+        Route::get('/score-periods', [ScorePeriodController::class, 'index'])->name('score-periods.index');
+        Route::get('/score-periods/create', [ScorePeriodController::class, 'create'])->name('score-periods.create');
+        Route::post('/score-periods', [ScorePeriodController::class, 'store'])->name('score-periods.store');
+        Route::post('/score-periods/{period}/set-current', [ScorePeriodController::class, 'setCurrent'])->name('score-periods.set-current');
         Route::get('/audit', [AuditLogController::class, 'index'])->name('audit.index');
+        Route::get('/system-log', [SystemLogController::class, 'index'])->name('system-log.index');
         Route::get('/settings', [SettingsController::class, 'index'])->name('settings.index');
+        Route::get('/tenants/create', [TenantController::class, 'create'])->name('tenants.create');
+        Route::post('/tenants', [TenantController::class, 'store'])->name('tenants.store');
+        Route::get('/tenants/{tenant}/edit', [TenantController::class, 'edit'])->name('tenants.edit');
+        Route::put('/tenants/{tenant}', [TenantController::class, 'update'])->name('tenants.update');
+        Route::post('/tenants/{tenant}/users', [TenantController::class, 'addUser'])->name('tenants.add-user');
     });
 
     Route::middleware('role:superadmin,campaign_admin,analyst')->group(function () {
@@ -46,10 +61,11 @@ Route::middleware(['auth', 'verified', 'tenant'])->prefix('admin')->name('admin.
     });
 
     Route::middleware('role:superadmin,campaign_admin')->group(function () {
-        Route::resource('campaigns', CampaignController::class)->except(['index', 'show']);
+        Route::resource('campaigns', CampaignController::class)->except(['index', 'show', 'create', 'edit']);
         Route::resource('templates', TemplateController::class)->except(['index', 'show']);
         Route::resource('attacks', AttackController::class)->except(['index', 'show']);
         Route::post('/campaigns/{campaign}/approve', [CampaignController::class, 'approve'])->name('campaigns.approve');
         Route::post('/campaigns/{campaign}/launch', [CampaignController::class, 'launch'])->name('campaigns.launch');
+        Route::post('/campaigns/{campaign}/cancel', [CampaignController::class, 'cancel'])->name('campaigns.cancel');
     });
 });
