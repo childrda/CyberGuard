@@ -65,15 +65,19 @@ class DashboardController extends Controller
             ->whereIn('status', [RemediationJob::STATUS_REMOVED, RemediationJob::STATUS_PARTIALLY_FAILED])
             ->sum('removed_count');
 
+        $tenant = Tenant::current();
+        $gamificationEnabled = $tenant?->gamification_enabled ?? false;
         $monthStart = now()->format('Y-m').'-01 00:00:00';
         $monthEnd = now()->endOfMonth()->format('Y-m-d 23:59:59');
-        $topReporters = ShieldPointsLedger::query()
-            ->whereBetween('created_at', [$monthStart, $monthEnd])
-            ->selectRaw('user_identifier, SUM(points_delta) as total_points')
-            ->groupBy('user_identifier')
-            ->orderByDesc('total_points')
-            ->limit(5)
-            ->get();
+        $topReporters = $gamificationEnabled && Tenant::currentId()
+            ? ShieldPointsLedger::query()
+                ->whereBetween('created_at', [$monthStart, $monthEnd])
+                ->selectRaw('user_identifier, SUM(points_delta) as total_points')
+                ->groupBy('user_identifier')
+                ->orderByDesc('total_points')
+                ->limit(5)
+                ->get()
+            : collect();
         $topReporter = $topReporters->first();
 
         $recentCampaigns = PhishingCampaign::with('template')->latest()->take(5)->get();
@@ -93,6 +97,7 @@ class DashboardController extends Controller
             ->values();
 
         return view('admin.dashboard', [
+            'gamificationEnabled' => $gamificationEnabled,
             'activeCampaigns' => $activeCampaigns,
             'sentCount' => $sentCount,
             'deliveredCount' => $deliveredCount,

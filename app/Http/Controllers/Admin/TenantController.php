@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Admin;
 
 use App\Http\Controllers\Controller;
 use App\Models\PhishingAttack;
+use App\Models\PhishingTemplate;
 use App\Models\Role;
 use App\Models\SystemLog;
 use App\Models\Tenant;
@@ -12,6 +13,7 @@ use Database\Seeders\PhishingAttackSeeder;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Facades\Password;
 use Illuminate\Support\Str;
 use Illuminate\View\View;
@@ -61,9 +63,11 @@ class TenantController extends Controller
                     'tenant_id' => $tenant->id,
                     'name' => $a->name,
                     'description' => $a->description,
+                    'category' => $a->category,
                     'subject' => $a->subject,
                     'from_name' => $a->from_name,
                     'from_email' => $a->from_email,
+                    'reply_to' => $a->reply_to,
                     'html_body' => $a->html_body,
                     'text_body' => $a->text_body,
                     'difficulty_rating' => $a->difficulty_rating,
@@ -71,6 +75,7 @@ class TenantController extends Controller
                     'times_clicked' => 0,
                     'landing_page_type' => $a->landing_page_type,
                     'training_page_id' => null,
+                    'tags' => $a->tags,
                     'active' => $a->active,
                 ]);
             }
@@ -78,13 +83,39 @@ class TenantController extends Controller
             (new PhishingAttackSeeder)->seedAttacksForTenant($tenant);
         }
 
-        return redirect()->route('admin.settings.index')->with('success', 'Tenant created with default attack templates. You can switch to it in the sidebar.');
+        // Copy phishing templates so the tenant has something to start with
+        $sourceTemplate = PhishingTemplate::withoutGlobalScope('tenant')->whereNotNull('tenant_id')->first();
+        if ($sourceTemplate) {
+            $sourceTemplates = PhishingTemplate::withoutGlobalScope('tenant')->where('tenant_id', $sourceTemplate->tenant_id)->get();
+            foreach ($sourceTemplates as $t) {
+                PhishingTemplate::withoutGlobalScope('tenant')->create([
+                    'tenant_id' => $tenant->id,
+                    'name' => $t->name,
+                    'subject' => $t->subject,
+                    'html_body' => $t->html_body,
+                    'text_body' => $t->text_body,
+                    'sender_name' => $t->sender_name,
+                    'sender_email' => $t->sender_email,
+                    'reply_to' => $t->reply_to,
+                    'landing_page_type' => $t->landing_page_type,
+                    'training_page_id' => null,
+                    'difficulty' => $t->difficulty,
+                    'tags' => $t->tags,
+                    'active' => $t->active,
+                    'created_by' => auth()->id(),
+                ]);
+            }
+        }
+
+        return redirect()->route('admin.settings.index')->with('success', 'Tenant created with default attack templates and templates. You can switch to it in the sidebar.');
     }
 
     public function edit(Tenant $tenant): View
     {
-        if (! auth()->user()?->isPlatformAdmin()) {
-            abort(403, 'Only platform administrators can edit tenants.');
+        $user = auth()->user();
+        $canEdit = $user?->isPlatformAdmin() || $user?->tenant_id === $tenant->id;
+        if (! $canEdit) {
+            abort(403, 'You do not have permission to edit this tenant.');
         }
         $tenant->load([]);
         $users = User::where('tenant_id', $tenant->id)->with('roles')->orderBy('name')->get();
@@ -94,23 +125,59 @@ class TenantController extends Controller
 
     public function update(Request $request, Tenant $tenant): RedirectResponse
     {
-        if (! auth()->user()?->isPlatformAdmin()) {
-            abort(403, 'Only platform administrators can edit tenants.');
+        $user = auth()->user();
+        $canEdit = $user?->isPlatformAdmin() || $user?->tenant_id === $tenant->id;
+        if (! $canEdit) {
+            abort(403, 'You do not have permission to edit this tenant.');
         }
 
         $validated = $request->validate([
             'name' => ['required', 'string', 'max:255'],
             'domain' => ['required', 'string', 'max:255', 'unique:tenants,domain,'.$tenant->id],
             'slug' => ['required', 'string', 'max:255', 'regex:/^[a-z0-9\-]+$/', 'unique:tenants,slug,'.$tenant->id],
+            'allowed_domains' => ['nullable', 'string', 'max:2000'],
             'remediation_policy' => ['required', 'in:report_only,analyst_approval_required,auto_remove_confirmed_phish'],
+            'google_credentials_file' => ['nullable', 'file', 'mimes:json', 'max:102400'],
+            'google_credentials_path' => ['nullable', 'string', 'max:500'],
+            'google_admin_user' => ['nullable', 'email', 'max:255'],
+            'directory_sync_enabled' => ['nullable', 'boolean'],
+            'gamification_enabled' => ['nullable', 'boolean'],
             'active' => ['nullable', 'boolean'],
         ]);
+
+        $allowedDomains = $validated['allowed_domains'] ?? '';
+        $allowedList = array_values(array_filter(array_map('trim', explode(',', $allowedDomains))));
+
+        $credentialsPath = $tenant->google_credentials_path;
+        if ($request->hasFile('google_credentials_file')) {
+            $file = $request->file('google_credentials_file');
+            $contents = $file->get();
+            $json = @json_decode($contents, true);
+            if (! is_array($json) || empty($json['type']) || empty($json['private_key']) || empty($json['client_email'])) {
+                return redirect()->back()
+                    ->withInput($request->except('google_credentials_file'))
+                    ->withErrors(['google_credentials_file' => 'File must be a valid Google service account JSON (type, client_email, and private_key).']);
+            }
+            $dir = 'tenant-credentials/'.$tenant->id;
+            Storage::disk('local')->makeDirectory($dir);
+            Storage::disk('local')->put($dir.'/google-credentials.json', $contents);
+            $credentialsPath = storage_path('app/'.$dir.'/google-credentials.json');
+        } elseif (trim((string) ($validated['google_credentials_path'] ?? '')) !== '') {
+            $credentialsPath = trim($validated['google_credentials_path']);
+        }
 
         $tenant->update([
             'name' => $validated['name'],
             'domain' => strtolower($validated['domain']),
             'slug' => $validated['slug'],
+            'allowed_domains' => $allowedList,
             'remediation_policy' => $validated['remediation_policy'],
+            'google_credentials_path' => $credentialsPath,
+            'google_admin_user' => trim((string) ($validated['google_admin_user'] ?? '')) !== '' ? trim($validated['google_admin_user']) : $tenant->google_admin_user,
+            'directory_sync_enabled' => (bool) ($validated['directory_sync_enabled'] ?? false),
+            'gamification_enabled' => auth()->user()?->isPlatformAdmin()
+                ? (bool) ($validated['gamification_enabled'] ?? false)
+                : $tenant->gamification_enabled,
             'active' => (bool) ($validated['active'] ?? true),
         ]);
 

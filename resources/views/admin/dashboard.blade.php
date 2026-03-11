@@ -181,6 +181,7 @@
         </div>
     </div>
 
+    @if($gamificationEnabled ?? true)
     {{-- Top Reporters --}}
     <div class="rounded-xl border border-slate-700 bg-slate-800/80 overflow-hidden">
         <div class="px-4 py-3 border-b border-slate-700">
@@ -201,6 +202,7 @@
         </div>
         <div class="px-4 py-2 border-t border-slate-700"><a href="{{ route('admin.leaderboard.index') }}" class="text-sm text-blue-400 hover:text-blue-300">View all</a></div>
     </div>
+    @endif
 
     {{-- Audit Log --}}
     <div class="rounded-xl border border-slate-700 bg-slate-800/80 overflow-hidden">

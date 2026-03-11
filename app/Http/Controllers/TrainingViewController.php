@@ -110,10 +110,7 @@ class TrainingViewController extends Controller
             return;
         }
         $campaign = $message->campaign;
-        $tenantId = $campaign->tenant_id ?? null;
-        if ($tenantId === null) {
-            return;
-        }
+        $tenant = $campaign->tenant;
 
         TrainingCompletion::create([
             'phishing_message_id' => $message->id,
@@ -124,15 +121,18 @@ class TrainingViewController extends Controller
             'event_type' => 'training_viewed',
             'occurred_at' => now(),
         ]);
-        $points = config('phishing.scoring.training_completed', 100);
-        if ($points > 0) {
-            app(PointsService::class)->award(
-                $tenantId,
-                $message->recipient_email,
-                'training_completed',
-                $points,
-                ['reason' => 'Completed training', 'campaign_id' => $campaign->id]
-            );
+
+        if ($tenant && $tenant->gamification_enabled) {
+            $points = config('phishing.scoring.training_completed', 100);
+            if ($points > 0) {
+                app(PointsService::class)->award(
+                    $tenant->id,
+                    $message->recipient_email,
+                    'training_completed',
+                    $points,
+                    ['reason' => 'Completed training', 'campaign_id' => $campaign->id]
+                );
+            }
         }
     }
 

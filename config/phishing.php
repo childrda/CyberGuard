@@ -32,9 +32,11 @@ return [
 
     /*
     |--------------------------------------------------------------------------
-    | Allowed sender domains
+    | Allowed sender domains (fallback only)
     |--------------------------------------------------------------------------
-    | Only these domains may receive simulation emails. Hard block on external.
+    | Prefer tenant-level allowed_domains (per tenant in Settings). This is only
+    | used if a tenant has no allowed_domains set (e.g. legacy). Leave empty
+    | to require configuring allowed domains per tenant.
     */
     'allowed_target_domains' => array_filter(explode(',', env('PHISHING_ALLOWED_DOMAINS', ''))),
 
@@ -75,6 +77,17 @@ return [
     'google_credentials_path' => env('GOOGLE_APPLICATION_CREDENTIALS'),
     'google_domain' => env('GOOGLE_WORKSPACE_DOMAIN', ''),
     'google_admin_user' => env('GOOGLE_ADMIN_USER', ''),
+
+    /*
+    |--------------------------------------------------------------------------
+    | Public URL for links and images in sent emails
+    |--------------------------------------------------------------------------
+    | When your app is not publicly reachable (e.g. dev box on internal IP),
+    | set this to a URL that recipients can reach: ngrok/Cloudflare Tunnel URL,
+    | or a staging server. All tracking links, tracking pixel, and asset URLs
+    | in outgoing emails will use this base. Fallback: APP_URL.
+    */
+    'public_url' => env('PHISHING_PUBLIC_URL', config('app.url')),
 
     /*
     |--------------------------------------------------------------------------

@@ -128,12 +128,13 @@ class TrackingController extends Controller
 
     private function awardNegativePointsForInteraction(PhishingMessage $message, string $eventType): void
     {
-        $message->load('campaign');
+        $message->load('campaign.tenant');
         $campaign = $message->campaign;
-        $tenantId = $campaign->tenant_id ?? null;
-        if ($tenantId === null) {
+        $tenant = $campaign->tenant;
+        if ($tenant === null || ! $tenant->gamification_enabled) {
             return;
         }
+        $tenantId = $tenant->id;
         $points = $eventType === 'clicked'
             ? config('phishing.scoring.clicked', -10)
             : config('phishing.scoring.submitted', -25);

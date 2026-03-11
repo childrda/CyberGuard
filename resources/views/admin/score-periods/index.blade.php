@@ -17,6 +17,11 @@
 @if(session('error'))
     <p class="mb-4 text-sm text-amber-400">{{ session('error') }}</p>
 @endif
+@if(isset($gamificationEnabled) && !$gamificationEnabled)
+    <div class="mb-4 rounded-lg border border-slate-600 bg-slate-800/50 p-4 text-slate-400 text-sm">
+        Gamification is disabled for this tenant. Score periods are not used for points or leaderboard until a platform administrator enables gamification in Settings → Edit tenant.
+    </div>
+@endif
 
 <div class="rounded-lg border border-slate-600 bg-slate-800/50 overflow-hidden">
     <table class="min-w-full divide-y divide-slate-600">

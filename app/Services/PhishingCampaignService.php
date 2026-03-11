@@ -89,12 +89,15 @@ class PhishingCampaignService
 
     /**
      * Validate all recipients are in allowed domains, then create PhishingMessage records and queue jobs.
+     * Allowed domains are taken from the campaign's tenant (not .env).
      */
     public function launchCampaign(PhishingCampaign $campaign): array
     {
-        $allowedDomains = $campaign->allowed_domains ?? config('phishing.allowed_target_domains', []);
+        $campaign->load('tenant');
+        $tenant = $campaign->tenant;
+        $allowedDomains = $tenant ? $tenant->getAllowedDomainsList() : [];
         if (empty($allowedDomains)) {
-            return ['ok' => false, 'error' => 'No allowed domains configured. Set PHISHING_ALLOWED_DOMAINS or campaign allowed_domains.'];
+            return ['ok' => false, 'error' => 'No allowed domains configured for this tenant. Edit the tenant in Settings and set Allowed domains.'];
         }
 
         $recipients = $this->resolveTargets($campaign);

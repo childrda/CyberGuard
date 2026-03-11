@@ -14,9 +14,11 @@ class PhishingAttack extends Model
         'tenant_id',
         'name',
         'description',
+        'category',
         'subject',
         'from_name',
         'from_email',
+        'reply_to',
         'html_body',
         'text_body',
         'difficulty_rating',
@@ -24,12 +26,14 @@ class PhishingAttack extends Model
         'times_clicked',
         'landing_page_type',
         'training_page_id',
+        'tags',
         'active',
     ];
 
     protected function casts(): array
     {
         return [
+            'tags' => 'array',
             'active' => 'boolean',
         ];
     }
@@ -42,6 +46,11 @@ class PhishingAttack extends Model
     public function trainingPage(): BelongsTo
     {
         return $this->belongsTo(LandingPage::class, 'training_page_id');
+    }
+
+    public function assets(): \Illuminate\Database\Eloquent\Relations\HasMany
+    {
+        return $this->hasMany(AttackAsset::class, 'attack_id');
     }
 
     public function campaigns(): BelongsToMany

@@ -21,7 +21,7 @@
 <div class="max-w-2xl space-y-8">
     <div class="rounded-lg border border-slate-600 bg-slate-800/50 p-6">
         <h2 class="text-sm font-semibold text-slate-400 uppercase tracking-wide mb-4">Tenant settings</h2>
-        <form method="post" action="{{ route('admin.tenants.update', $tenant) }}" class="space-y-4">
+        <form method="post" action="{{ route('admin.tenants.update', $tenant) }}" class="space-y-4" enctype="multipart/form-data">
             @csrf
             @method('PUT')
             <div>
@@ -47,6 +47,14 @@
                 @error('slug')<p class="mt-1 text-sm text-red-400">{{ $message }}</p>@enderror
             </div>
             <div>
+                <label for="allowed_domains" class="block text-sm font-medium text-slate-300">Allowed domains</label>
+                <input type="text" name="allowed_domains" id="allowed_domains" value="{{ old('allowed_domains', is_array($tenant->allowed_domains) ? implode(', ', $tenant->allowed_domains) : '') }}"
+                    class="mt-1 w-full rounded border border-slate-600 bg-slate-800 px-3 py-2 text-slate-100 placeholder-slate-500"
+                    placeholder="e.g. lcps.k12.va.us, school.edu">
+                <p class="mt-1 text-xs text-slate-500">Comma-separated. Only these domains may receive simulation emails. Required for launching campaigns.</p>
+                @error('allowed_domains')<p class="mt-1 text-sm text-red-400">{{ $message }}</p>@enderror
+            </div>
+            <div>
                 <label for="remediation_policy" class="block text-sm font-medium text-slate-300">Remediation policy</label>
                 <select name="remediation_policy" id="remediation_policy"
                     class="mt-1 w-full rounded border border-slate-600 bg-slate-800 px-3 py-2 text-slate-100">
@@ -63,6 +71,55 @@
                 <label for="active" class="text-sm text-slate-300">Tenant active (inactive tenants cannot be selected)</label>
             </div>
             @error('active')<p class="mt-1 text-sm text-red-400">{{ $message }}</p>@enderror
+            <div class="border-t border-slate-600 pt-4 mt-4">
+                <h3 class="text-sm font-medium text-slate-300 mb-3">Directory integration (Google Workspace)</h3>
+                <p class="text-xs text-slate-500 mb-3">Connect to search groups and OUs when creating campaigns. Service account JSON with domain-wide delegation (Admin SDK Directory API). When creating a campaign, choose target type <strong>Group</strong> or <strong>OU</strong> to search and select user groups from your workspace.</p>
+                <div class="space-y-3">
+                    <div>
+                        <label for="google_credentials_file" class="block text-xs font-medium text-slate-400">Upload service account JSON</label>
+                        <input type="file" name="google_credentials_file" id="google_credentials_file" accept=".json,application/json"
+                            class="mt-1 w-full rounded border border-slate-600 bg-slate-800 px-3 py-2 text-slate-100 text-sm file:mr-2 file:rounded file:border-0 file:bg-blue-600 file:px-3 file:py-1.5 file:text-sm file:text-white file:hover:bg-blue-500">
+                        <p class="mt-1 text-xs text-slate-500">File is stored securely on the server for this tenant only; not accessible via the web. Upload a new file to replace the existing one.</p>
+                        @error('google_credentials_file')<p class="mt-1 text-sm text-red-400">{{ $message }}</p>@enderror
+                        @if($tenant->google_credentials_path && \Illuminate\Support\Str::contains($tenant->google_credentials_path, 'tenant-credentials'))
+                            <p class="mt-1 text-xs text-green-400">Credentials are stored for this tenant.</p>
+                        @endif
+                    </div>
+                    <div>
+                        <label for="google_credentials_path" class="block text-xs font-medium text-slate-400">Or enter server path (optional)</label>
+                        <input type="text" name="google_credentials_path" id="google_credentials_path" value="{{ old('google_credentials_path', $tenant->google_credentials_path) }}"
+                            class="mt-1 w-full rounded border border-slate-600 bg-slate-800 px-3 py-2 text-slate-100 text-sm placeholder-slate-500"
+                            placeholder="e.g. /secure/tenant-keys/google-service-account.json">
+                        <p class="mt-1 text-xs text-slate-500">Only if your server has the JSON at a fixed path; leave blank to use the uploaded file above.</p>
+                    </div>
+                    <div>
+                        <label for="google_admin_user" class="block text-xs font-medium text-slate-400">Admin email (impersonate for API)</label>
+                        <input type="email" name="google_admin_user" id="google_admin_user" value="{{ old('google_admin_user', $tenant->google_admin_user) }}"
+                            class="mt-1 w-full rounded border border-slate-600 bg-slate-800 px-3 py-2 text-slate-100 text-sm placeholder-slate-500"
+                            placeholder="admin@{{ $tenant->domain }}">
+                    </div>
+                    <div class="flex items-center gap-2">
+                        <input type="hidden" name="directory_sync_enabled" value="0">
+                        <input type="checkbox" name="directory_sync_enabled" id="directory_sync_enabled" value="1" {{ old('directory_sync_enabled', $tenant->directory_sync_enabled) ? 'checked' : '' }}
+                            class="rounded border-slate-500 bg-slate-700 text-blue-500 focus:ring-blue-500">
+                        <label for="directory_sync_enabled" class="text-sm text-slate-300">Enable directory sync</label>
+                    </div>
+                </div>
+            </div>
+            <div class="border-t border-slate-600 pt-4 mt-4">
+                <h3 class="text-sm font-medium text-slate-300 mb-2">Gamification</h3>
+                <p class="text-xs text-slate-500 mb-2">When enabled, users get feedback (points, leaderboard, badges) for reporting and training. When disabled, campaigns still send and track clicks/submits but no points or leaderboard.</p>
+                @if(auth()->user()?->isPlatformAdmin())
+                    <div class="flex items-center gap-2">
+                        <input type="hidden" name="gamification_enabled" value="0">
+                        <input type="checkbox" name="gamification_enabled" id="gamification_enabled" value="1" {{ old('gamification_enabled', $tenant->gamification_enabled) ? 'checked' : '' }}
+                            class="rounded border-slate-500 bg-slate-700 text-blue-500 focus:ring-blue-500">
+                        <label for="gamification_enabled" class="text-sm text-slate-300">Enable gamification</label>
+                    </div>
+                @else
+                    <p class="text-sm text-slate-400">Gamification is <strong>{{ $tenant->gamification_enabled ? 'enabled' : 'disabled' }}</strong>. Only the platform administrator can change this.</p>
+                @endif
+            </div>
             <div class="flex gap-2">
                 <button type="submit" class="rounded bg-blue-600 hover:bg-blue-500 px-4 py-2 text-white">Save tenant</button>
             </div>

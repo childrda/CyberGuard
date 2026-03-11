@@ -8,6 +8,11 @@
     <p class="text-slate-400">Shield points by {{ $scope === 'department' ? 'department' : ($scope === 'ou' ? 'OU' : 'user') }} — {{ $periodLabel }}</p>
 </div>
 
+@if(isset($gamificationEnabled) && !$gamificationEnabled)
+    <div class="rounded-lg border border-slate-600 bg-slate-800/50 p-6 text-center text-slate-400">
+        <p>Gamification is disabled for this tenant. Campaigns still send and track clicks and reports, but points and leaderboard are not available. A platform administrator can enable gamification in Settings → Edit tenant.</p>
+    </div>
+@else
 <form method="get" class="mb-6 flex flex-wrap gap-4 items-end">
     <div class="flex gap-2 items-center">
         <span class="text-sm text-slate-400">Scope:</span>
@@ -53,5 +58,6 @@
 </div>
 @if(empty($leaderboard) && \App\Models\Tenant::currentId())
     <p class="mt-4 text-slate-500 text-sm">No points in this period yet. Points are recorded when users report simulations, complete training, or interact with simulations.</p>
+@endif
 @endif
 @endsection

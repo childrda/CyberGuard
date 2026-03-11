@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <meta name="csrf-token" content="{{ csrf_token() }}">
     <title>{{ config('app.name') }} - @yield('title', 'Admin')</title>
-    <link rel="icon" type="image/png" href="{{ asset('images/cyberguard-logo.png') }}">
+    <link rel="icon" type="image/png" href="{{ asset('images/favicon.png') }}">
     <script src="https://cdn.tailwindcss.com"></script>
     <script>
         tailwind.config = {
@@ -43,6 +43,12 @@
                     <span class="text-xs text-slate-400">Inbox Security & Phishing Defense</span>
                 </div>
             </div>
+            @php
+                $currentTenant = \App\Models\Tenant::current();
+                $user = auth()->user();
+                $tenants = \App\Models\Tenant::where('active', true)->orderBy('name')->get();
+                $switchableTenants = $user?->isPlatformAdmin() ? $tenants : $tenants->where('id', $user?->tenant_id);
+            @endphp
             <nav class="p-2 flex-1">
                 <a href="{{ route('admin.dashboard') }}" class="flex items-center gap-2 rounded-lg px-3 py-2.5 text-sm font-medium {{ request()->routeIs('admin.dashboard') ? 'bg-blue-600 text-white' : 'text-slate-300 hover:bg-slate-800 hover:text-white' }}">Dashboard</a>
                 <a href="{{ route('admin.reports.index') }}" class="flex items-center gap-2 rounded-lg px-3 py-2.5 text-sm font-medium {{ request()->routeIs('admin.reports.*') ? 'bg-blue-600 text-white' : 'text-slate-300 hover:bg-slate-800 hover:text-white' }}">
@@ -54,19 +60,15 @@
                 <a href="{{ route('admin.remediation.index') }}" class="flex items-center gap-2 rounded-lg px-3 py-2.5 text-sm font-medium {{ request()->routeIs('admin.remediation.*') ? 'bg-blue-600 text-white' : 'text-slate-300 hover:bg-slate-800 hover:text-white' }}">Remediation</a>
                 <a href="{{ route('admin.campaigns.index') }}" class="flex items-center gap-2 rounded-lg px-3 py-2.5 text-sm font-medium {{ request()->routeIs('admin.campaigns.*') ? 'bg-blue-600 text-white' : 'text-slate-300 hover:bg-slate-800 hover:text-white' }}">Campaigns</a>
                 <a href="{{ route('admin.attacks.index') }}" class="flex items-center gap-2 rounded-lg px-3 py-2.5 text-sm font-medium {{ request()->routeIs('admin.attacks.*') ? 'bg-blue-600 text-white' : 'text-slate-300 hover:bg-slate-800 hover:text-white' }}">Attack library</a>
+                @if($currentTenant?->gamification_enabled ?? true)
                 <a href="{{ route('admin.leaderboard.index') }}" class="flex items-center gap-2 rounded-lg px-3 py-2.5 text-sm font-medium {{ request()->routeIs('admin.leaderboard.*') ? 'bg-blue-600 text-white' : 'text-slate-300 hover:bg-slate-800 hover:text-white' }}">Leaderboard</a>
                 <a href="{{ route('admin.score-periods.index') }}" class="flex items-center gap-2 rounded-lg px-3 py-2.5 text-sm font-medium {{ request()->routeIs('admin.score-periods.*') ? 'bg-blue-600 text-white' : 'text-slate-300 hover:bg-slate-800 hover:text-white' }}">Score periods</a>
+                @endif
                 <a href="{{ route('admin.audit.index') }}" class="flex items-center gap-2 rounded-lg px-3 py-2.5 text-sm font-medium {{ request()->routeIs('admin.audit.*') ? 'bg-blue-600 text-white' : 'text-slate-300 hover:bg-slate-800 hover:text-white' }}">Audit Logs</a>
                 <a href="{{ route('admin.system-log.index') }}" class="flex items-center gap-2 rounded-lg px-3 py-2.5 text-sm font-medium {{ request()->routeIs('admin.system-log.*') ? 'bg-blue-600 text-white' : 'text-slate-300 hover:bg-slate-800 hover:text-white' }}">System log</a>
                 <a href="{{ route('admin.settings.index') }}" class="flex items-center gap-2 rounded-lg px-3 py-2.5 text-sm font-medium {{ request()->routeIs('admin.settings.*') ? 'bg-blue-600 text-white' : 'text-slate-300 hover:bg-slate-800 hover:text-white' }}">Settings</a>
             </nav>
             {{-- Tenant switcher --}}
-            @php
-                $currentTenant = \App\Models\Tenant::current();
-                $user = auth()->user();
-                $tenants = \App\Models\Tenant::where('active', true)->orderBy('name')->get();
-                $switchableTenants = $user?->isPlatformAdmin() ? $tenants : $tenants->where('id', $user?->tenant_id);
-            @endphp
             @if($switchableTenants->isNotEmpty())
                 <div class="p-2 border-t border-slate-700">
                     <form method="post" action="{{ route('admin.tenant.switch') }}" class="space-y-1">
@@ -124,5 +126,6 @@
             </main>
         </div>
     </div>
+    @stack('scripts')
 </body>
 </html>

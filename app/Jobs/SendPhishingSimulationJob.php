@@ -5,6 +5,7 @@ namespace App\Jobs;
 use App\Models\PhishingEvent;
 use App\Models\PhishingMessage;
 use App\Services\GmailSimulationMailer;
+use App\Services\PlaceholderReplacementService;
 use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Bus\Dispatchable;
@@ -21,7 +22,7 @@ class SendPhishingSimulationJob implements ShouldQueue
         $this->onQueue('phishing-send');
     }
 
-    public function handle(GmailSimulationMailer $mailer): void
+    public function handle(GmailSimulationMailer $mailer, PlaceholderReplacementService $placeholders): void
     {
         if (! config('phishing.simulation_enabled', false)) {
             return;
@@ -38,7 +39,7 @@ class SendPhishingSimulationJob implements ShouldQueue
             $textBody = $attack->text_body ?? strip_tags($attack->html_body);
             $fromName = $attack->from_name ?? $template?->sender_name;
             $fromEmail = $attack->from_email ?? $template?->sender_email;
-            $replyTo = $template?->reply_to;
+            $replyTo = $attack->reply_to ?? $template?->reply_to;
         } else {
             $subject = $template->subject;
             $htmlBody = $template->html_body;
@@ -47,6 +48,14 @@ class SendPhishingSimulationJob implements ShouldQueue
             $fromEmail = $template->sender_email;
             $replyTo = $template->reply_to;
         }
+
+        $context = $placeholders->contextForMessage($msg);
+        $subject = $placeholders->replace($subject, $context);
+        $htmlBody = $placeholders->replace($htmlBody, $context);
+        if ($textBody !== null) {
+            $textBody = $placeholders->replace($textBody, $context);
+        }
+
         $body = $mailer->injectTrackingIntoBody($htmlBody, $msg->tracking_token);
 
         try {

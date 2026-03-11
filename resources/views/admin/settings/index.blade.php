@@ -27,7 +27,7 @@
             <div><dt class="text-slate-500">Remediation policy</dt><dd><span class="rounded px-2 py-0.5 text-xs bg-slate-600/50 text-slate-200">{{ $tenant->remediation_policy }}</span></dd></div>
         </dl>
     </div>
-    @if(auth()->user()?->isPlatformAdmin())
+    @if(auth()->user()?->isPlatformAdmin() || auth()->user()?->tenant_id === $tenant->id)
         <a href="{{ route('admin.tenants.edit', $tenant) }}" class="rounded border border-slate-600 bg-slate-800 px-3 py-2 text-slate-300 hover:bg-slate-700 text-sm shrink-0">Edit tenant</a>
     @endif
 </div>

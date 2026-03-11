@@ -135,7 +135,7 @@ class ReportWebhookController extends Controller
             ]);
         }
 
-        if ($tenant && $phishingMessage) {
+        if ($tenant && $phishingMessage && $tenant->gamification_enabled) {
             $points = config('phishing.scoring.simulation_reported', 50);
             app(\App\Services\ShieldPointsService::class)->award(
                 $tenant->id,

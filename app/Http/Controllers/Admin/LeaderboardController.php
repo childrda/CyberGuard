@@ -17,7 +17,9 @@ class LeaderboardController extends Controller
 
     public function index(Request $request): View
     {
-        $tenantId = Tenant::currentId();
+        $tenant = Tenant::current();
+        $tenantId = $tenant?->id;
+        $gamificationEnabled = $tenant?->gamification_enabled ?? false;
         $scope = $request->input('scope', 'tenant'); // tenant, department, ou
         $periodInput = $request->input('period');
         $scorePeriodId = ($periodInput !== null && $periodInput !== '') ? (int) $periodInput : null;
@@ -28,7 +30,7 @@ class LeaderboardController extends Controller
 
         $leaderboard = [];
         $periodLabel = 'All time';
-        if ($tenantId !== null) {
+        if ($tenantId !== null && $gamificationEnabled) {
             if ($scorePeriodId) {
                 $p = $periods->firstWhere('id', $scorePeriodId);
                 $periodLabel = $p ? $p->name : 'Period #'.$scorePeriodId;
@@ -49,6 +51,7 @@ class LeaderboardController extends Controller
             'periods' => $periods,
             'scorePeriodId' => $scorePeriodId,
             'periodLabel' => $periodLabel,
+            'gamificationEnabled' => $gamificationEnabled,
         ]);
     }
 }

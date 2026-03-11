@@ -11,6 +11,7 @@ class Tenant extends Model
         'name',
         'domain',
         'slug',
+        'allowed_domains',
         'google_credentials_path',
         'webhook_secret',
         'addon_config',
@@ -18,6 +19,8 @@ class Tenant extends Model
         'reporting_rules',
         'remediation_policy',
         'google_admin_user',
+        'directory_sync_enabled',
+        'gamification_enabled',
         'active',
     ];
 
@@ -27,8 +30,23 @@ class Tenant extends Model
             'addon_config' => 'array',
             'campaign_settings' => 'array',
             'reporting_rules' => 'array',
+            'allowed_domains' => 'array',
+            'directory_sync_enabled' => 'boolean',
+            'gamification_enabled' => 'boolean',
             'active' => 'boolean',
         ];
+    }
+
+    /**
+     * Allowed domains for this tenant (simulation emails only to these). Replaces .env PHISHING_ALLOWED_DOMAINS.
+     */
+    public function getAllowedDomainsList(): array
+    {
+        $list = $this->allowed_domains ?? [];
+        if (is_array($list) && ! empty($list)) {
+            return array_values(array_filter(array_map('strtolower', array_map('trim', $list))));
+        }
+        return [];
     }
 
     public function campaigns(): HasMany

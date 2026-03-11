@@ -35,7 +35,9 @@ class CampaignController extends Controller
         $this->authorize('create', PhishingCampaign::class);
         $templates = PhishingTemplate::where('active', true)->get();
         $attacks = PhishingAttack::where('active', true)->orderBy('difficulty_rating')->orderBy('name')->get();
-        return view('admin.campaigns.create', compact('templates', 'attacks'));
+        $tenant = \App\Models\Tenant::current();
+        $directorySyncEnabled = $tenant && $tenant->directory_sync_enabled;
+        return view('admin.campaigns.create', compact('templates', 'attacks', 'directorySyncEnabled'));
     }
 
     public function store(Request $request): RedirectResponse
@@ -45,14 +47,24 @@ class CampaignController extends Controller
             'name' => ['required', 'string', 'max:255'],
             'template_id' => ['required', 'exists:phishing_templates,id'],
             'target_type' => ['required', 'in:user,group,ou,csv'],
-            'target_identifier' => ['required', 'string'],
+            'target_identifier' => ['nullable', 'string'],
             'display_name' => ['nullable', 'string'],
+            'workspace_groups' => ['nullable', 'array'],
+            'workspace_groups.*' => ['string', 'email'],
+            'workspace_ous' => ['nullable', 'array'],
+            'workspace_ous.*' => ['string', 'max:500'],
             'attack_ids' => ['nullable', 'array'],
             'attack_ids.*' => ['exists:phishing_attacks,id'],
             'window_start' => ['nullable', 'date'],
             'window_end' => ['nullable', 'date', 'after_or_equal:window_start'],
             'emails_per_recipient' => ['nullable', 'integer', 'min:1', 'max:50'],
         ]);
+        $workspaceGroups = array_filter(array_map('trim', $validated['workspace_groups'] ?? []));
+        $workspaceOus = array_filter(array_map('trim', $validated['workspace_ous'] ?? []));
+        $useWorkspace = ($validated['target_type'] === 'group' || $validated['target_type'] === 'ou') && (count($workspaceGroups) > 0 || count($workspaceOus) > 0);
+        if (! $useWorkspace && empty($validated['target_identifier'])) {
+            $request->validate(['target_identifier' => ['required', 'string']]);
+        }
         if (($validated['window_start'] ?? null) xor ($validated['window_end'] ?? null)) {
             $validated['window_start'] = null;
             $validated['window_end'] = null;
@@ -69,12 +81,35 @@ class CampaignController extends Controller
             'emails_per_recipient' => $validated['emails_per_recipient'] ?? 1,
         ]);
 
-        PhishingCampaignTarget::create([
-            'campaign_id' => $campaign->id,
-            'target_type' => $validated['target_type'],
-            'target_identifier' => $validated['target_identifier'],
-            'display_name' => $validated['display_name'] ?? null,
-        ]);
+        if ($useWorkspace) {
+            foreach ($workspaceGroups as $email) {
+                if ($email !== '') {
+                    PhishingCampaignTarget::create([
+                        'campaign_id' => $campaign->id,
+                        'target_type' => 'group',
+                        'target_identifier' => strtolower($email),
+                        'display_name' => null,
+                    ]);
+                }
+            }
+            foreach ($workspaceOus as $path) {
+                if ($path !== '') {
+                    PhishingCampaignTarget::create([
+                        'campaign_id' => $campaign->id,
+                        'target_type' => 'ou',
+                        'target_identifier' => $path,
+                        'display_name' => null,
+                    ]);
+                }
+            }
+        } else {
+            PhishingCampaignTarget::create([
+                'campaign_id' => $campaign->id,
+                'target_type' => $validated['target_type'],
+                'target_identifier' => $validated['target_identifier'] ?? '',
+                'display_name' => $validated['display_name'] ?? null,
+            ]);
+        }
 
         $attackIds = PhishingAttack::whereIn('id', $request->input('attack_ids', []))->pluck('id')->toArray();
         $campaign->attacks()->sync($attackIds);

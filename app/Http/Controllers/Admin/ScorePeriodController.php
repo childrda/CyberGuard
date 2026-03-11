@@ -17,7 +17,9 @@ class ScorePeriodController extends Controller
 
     public function index(): View
     {
-        $tenantId = \App\Models\Tenant::currentId();
+        $tenant = \App\Models\Tenant::current();
+        $tenantId = $tenant?->id;
+        $gamificationEnabled = $tenant?->gamification_enabled ?? false;
         if ($tenantId === null) {
             $periods = collect();
         } else {
@@ -26,6 +28,7 @@ class ScorePeriodController extends Controller
 
         return view('admin.score-periods.index', [
             'periods' => $periods,
+            'gamificationEnabled' => $gamificationEnabled,
         ]);
     }
 
