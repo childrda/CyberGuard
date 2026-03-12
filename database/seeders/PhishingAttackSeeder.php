@@ -18,6 +18,14 @@ class PhishingAttackSeeder extends Seeder
     }
 
     /**
+     * Seed default attack templates for a tenant. Call statically from commands.
+     */
+    public static function seedForTenant(Tenant $tenant): void
+    {
+        (new self())->seedAttacksForTenant($tenant);
+    }
+
+    /**
      * Seed default attack templates for a tenant (e.g. when creating a new tenant).
      */
     public function seedAttacksForTenant(Tenant $tenant): void

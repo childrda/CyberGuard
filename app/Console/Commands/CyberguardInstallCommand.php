@@ -130,7 +130,7 @@ class CyberguardInstallCommand extends Command
 
     protected function seedDefaultAttacksForTenant(Tenant $tenant): void
     {
-        PhishingAttackSeeder::seedAttacksForTenant($tenant);
+        PhishingAttackSeeder::seedForTenant($tenant);
         $this->info('Default phishing attacks seeded for tenant.');
     }
 
