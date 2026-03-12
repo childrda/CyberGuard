@@ -75,7 +75,7 @@ class CyberguardInstaller
                 'email' => $input['admin_email'],
                 'password' => Hash::make($input['admin_password']),
                 'email_verified_at' => now(),
-                'tenant_id' => null,
+                'tenant_id' => $tenant->id,
             ]);
 
             $superadmin = Role::where('name', 'superadmin')->firstOrFail();
