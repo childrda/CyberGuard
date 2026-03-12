@@ -110,16 +110,21 @@ function sendReport(e, reportType, userActions) {
     return showToast('Could not read message. Please try again.');
   }
 
-  var message = Gmail.Users.Messages.get('me', messageId);
-  var payload = buildPayload(message, reportType);
+  var message;
+  try {
+    message = GmailApp.getMessageById(messageId);
+  } catch (err) {
+    return showToast('Could not read message. Please try again.');
+  }
+  if (!message) {
+    return showToast('Could not read message. Please try again.');
+  }
+
+  var payload = buildPayloadFromGmailMessage(message, reportType);
   payload.user_actions = userActions;
 
-  // Get reporter email from Gmail profile if available
   try {
-    var profile = Gmail.Users.getProfile('me');
-    if (profile && profile.emailAddress) {
-      payload.reporter_email = profile.emailAddress;
-    }
+    payload.reporter_email = Session.getActiveUser().getEmail();
   } catch (err) {
     // ignore
   }
@@ -148,35 +153,36 @@ function sendReport(e, reportType, userActions) {
   }
 }
 
-function buildPayload(message, reportType) {
+/**
+ * Build webhook payload from GmailApp GmailMessage (no Gmail advanced service required).
+ */
+function buildPayloadFromGmailMessage(message, reportType) {
+  var threadId = message.getThread ? message.getThread() : null;
+  var snippet = message.getPlainBody ? (message.getPlainBody().substring(0, 500) || '') : '';
+
   var payload = {
     report_type: reportType,
-    gmail_message_id: message.id,
-    gmail_thread_id: message.threadId,
-    subject: null,
-    from: null,
-    to: null,
-    date: null,
-    snippet: message.snippet || null,
+    gmail_message_id: message.getId(),
+    gmail_thread_id: threadId ? threadId.getId() : null,
+    subject: message.getSubject ? message.getSubject() : null,
+    from: message.getFrom ? message.getFrom() : null,
+    to: message.getTo ? message.getTo() : null,
+    date: message.getDate ? message.getDate().toString() : null,
+    snippet: snippet,
     headers: {}
   };
 
-  var headers = message.payload && message.payload.headers ? message.payload.headers : [];
+  var headers = message.getHeaders ? message.getHeaders() : [];
   for (var i = 0; i < headers.length; i++) {
     var h = headers[i];
     payload.headers[h.name] = h.value;
-    if (h.name === 'Subject') payload.subject = h.value;
-    if (h.name === 'From') payload.from = h.value;
-    if (h.name === 'To') payload.to = h.value;
-    if (h.name === 'Date') payload.date = h.value;
   }
-
-  // Parse From into address and name if needed
   if (payload.from) {
     var match = payload.from.match(/<([^>]+)>/);
     payload.from_address = match ? match[1].trim() : payload.from;
     payload.from_display = match ? payload.from.replace(match[0], '').replace(/^["']|["']$/g, '').trim() : null;
   }
+  payload.to_addresses = payload.to || null;
 
   return payload;
 }
