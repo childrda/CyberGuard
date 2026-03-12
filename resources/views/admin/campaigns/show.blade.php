@@ -184,7 +184,7 @@
                         <tr>
                             <td class="px-4 py-2 text-slate-200">{{ $msg->recipient_name ?: '—' }}</td>
                             <td class="px-4 py-2 text-slate-200">{{ $msg->recipient_email }}</td>
-                            <td class="px-4 py-2 text-slate-300">{{ $msg->sent_at ? $msg->sent_at->format('n/j/Y') : '—' }}</td>
+                            <td class="px-4 py-2 text-slate-300">{{ $msg->sent_at ? $msg->sent_at->format('n/j/Y g:i A') : '—' }}</td>
                             <td class="px-4 py-2 text-slate-300">{{ $msg->attack?->name ?? '—' }}</td>
                             <td class="px-4 py-2">
                                 @php

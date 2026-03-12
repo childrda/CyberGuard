@@ -25,20 +25,33 @@ To get CyberGuard running:
 
 1. **Install** – Clone the repo, run `composer install`, copy `.env.example` to `.env`, and generate an app key.
 2. **Configure** – Edit `.env` with your database credentials and (for the Gmail add-on) a webhook secret. See [Step-by-step installation](#step-by-step-installation) below.
-3. **Database** – Create an empty MySQL database, then run `php artisan migrate` and `php artisan db:seed` (seed is for local dev only).
-4. **Run** – Start the app with `php artisan serve` and open http://localhost:8000. Log in with a seeded account (see [First login](#5-first-login-local-dev-only)).
+3. **Database** – Create an empty MySQL database, run `php artisan migrate`, then either:
+   - **Production:** Run the interactive installer: `php artisan cyberguard:install` (creates your first tenant and super admin; **use a strong password**).
+   - **Local dev:** Run `php artisan db:seed` for roles and landing page; optionally `php artisan db:seed --class=DevSeeder` for a demo tenant and users (example.com).
+4. **Run** – Start the app with `php artisan serve` and open http://localhost:8000. Log in with the account you created (production) or a seeded demo account (local; see [First login](#5-first-login-local-dev-only)).
 
 For the Gmail Report Phish add-on, follow [Gmail Report Phish add-on setup](#gmail-report-phish-add-on-setup) after the app is running.
 
-**Quick reference – minimal commands (after you create the DB and edit .env):**
+**Quick reference – production (after DB and .env):**
 
 ```bash
 composer install && cp .env.example .env && php artisan key:generate
-php artisan migrate && php artisan db:seed
+php artisan migrate
+php artisan cyberguard:install   # Interactive: tenant name, domain, allowed domains, slug, super admin name/email/password
 php artisan serve
 ```
 
-Then open http://localhost:8000 and log in with **admin@example.com** / **password**.
+**Quick reference – local dev (demo tenant + users):**
+
+```bash
+composer install && cp .env.example .env && php artisan key:generate
+php artisan migrate && php artisan db:seed && php artisan db:seed --class=DevSeeder
+php artisan serve
+```
+
+Then open http://localhost:8000 and log in (production: the account you created in the installer; local: **admin@example.com** / **password** — dev only).
+
+> **Passwords must be complex.** When running `cyberguard:install`, choose a strong super admin password: at least 8 characters, and use a mix of uppercase, lowercase, numbers, and symbols. Do not use default or guessable passwords in production.
 
 ---
 
@@ -120,18 +133,40 @@ PHISHING_SIMULATION_ENABLED=false
 PHISHING_ALLOWED_DOMAINS=example.com
 ```
 
-### 3. Run migrations and seed data (local / dev only)
+### 3. Run migrations and create your first tenant/admin
 
-From the project root:
+From the project root, run migrations first:
 
 ```bash
 php artisan migrate
-php artisan db:seed
 ```
 
-- **Migrations** create the tables. They should complete without errors.
-- **Seeding** creates a default tenant, admin users, a sample template, and a sample campaign. **Use only for local development.**  
-  In production, `php artisan db:seed` is blocked unless you set `SEEDER_ALLOW_PRODUCTION=true` and `SEEDER_DEFAULT_PASSWORD` in `.env` (see [Security](#security-production-checklist)).
+**Production (recommended):** Do **not** seed default tenants or users. Use the interactive installer to create your first tenant and super admin with your own values:
+
+```bash
+php artisan cyberguard:install
+```
+
+You will be prompted for:
+
+- **Tenant name** – e.g. your organization name  
+- **Tenant domain** – e.g. `company.com` (used for tenant identification and add-on)  
+- **Allowed domains** – comma-separated domains that may receive simulation emails (defaults to tenant domain)  
+- **Tenant slug** – leave empty to auto-generate from the name, or enter one (e.g. `acme`)  
+- **Super admin name** – full name of the first admin  
+- **Super admin email** – login email  
+- **Super admin password** – **use a strong password** (min 8 characters; use uppercase, lowercase, numbers, and symbols)
+
+The installer creates the tenant and a platform superadmin (no default credentials). It also seeds the default landing page, phishing attacks, and badges for that tenant. You can log in immediately after. If a tenant or superadmin already exists, the installer will skip unless you pass `--force` (not recommended in production).
+
+**Local development only:** To get a demo tenant and users (example.com, admin@example.com, etc.) for testing:
+
+```bash
+php artisan db:seed
+php artisan db:seed --class=DevSeeder
+```
+
+`db:seed` creates roles and the default landing page. `DevSeeder` creates the example.com tenant and demo users; it **only runs when `APP_ENV=local`**. In production, `db:seed` is blocked unless you set `SEEDER_ALLOW_PRODUCTION=true` (see [Security](#security-production-checklist)).
 
 ### 4. Start the application
 
@@ -143,11 +178,10 @@ php artisan serve
 
 Open a browser to **http://localhost:8000**. You should see the login page.
 
-### 5. First login (local dev only)
+### 5. First login
 
-**These credentials are for local development only. Do not use them in production.** In production, create users and tenants through your own process.
-
-Use **one** of these accounts to log in:
+- **Production:** Log in with the **super admin email and password** you set when you ran `php artisan cyberguard:install`. Use the **Tenant** dropdown in the sidebar to select your tenant.
+- **Local dev (after DevSeeder):** Use **one** of these demo accounts to log in. **Do not use these in production.**
 
 | Email | Password | Role | What you can do |
 |-------|----------|------|-----------------|
@@ -329,7 +363,9 @@ Feature tests cover: auth and dashboard access, webhook (signature, unknown tena
 
 ## Security (production checklist)
 
-- **Seeding:** In production, `php artisan db:seed` is **blocked** unless you set `SEEDER_ALLOW_PRODUCTION=true` in `.env`. Use that only for a one-time bootstrap; set `SEEDER_DEFAULT_PASSWORD` to a strong value (required when `APP_ENV=production`).
+- **First-run setup:** Use `php artisan cyberguard:install` to create your first tenant and super admin. Do not rely on seeded default tenants or users in production.
+- **Passwords:** Super admin and all user passwords must be **complex**: at least 8 characters, with a mix of uppercase, lowercase, numbers, and symbols. The installer enforces a minimum length; choose a strong password and do not reuse it elsewhere.
+- **Seeding:** In production, `php artisan db:seed` is **blocked** unless you set `SEEDER_ALLOW_PRODUCTION=true` in `.env`. Use that only if you need to add roles/landing pages; do not use it to create default tenants or users. `DevSeeder` (demo tenant/users) only runs when `APP_ENV=local`.
 - **Debug:** Never run with `APP_DEBUG=true` in production. Set `APP_DEBUG=false` and set `APP_URL` to your real URL (used for redirects and links).
 - **Webhook secret:** Keep `PHISHING_WEBHOOK_SECRET` long and random. The webhook rejects requests with an invalid signature. Rotate the secret if compromised and update it in both `.env` and the Gmail Apps Script project.
 - **Add-on and admin access:** Deploy the Gmail add-on only to your Google Workspace domain. Use HTTPS for the app and restrict admin routes to trusted networks or VPN where possible.

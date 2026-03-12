@@ -17,7 +17,7 @@ use App\Http\Controllers\Admin\TenantSwitcherController;
 use App\Http\Controllers\Admin\WorkspaceController;
 use Illuminate\Support\Facades\Route;
 
-Route::middleware(['auth', 'verified', 'tenant'])->prefix('admin')->name('admin.')->group(function () {
+Route::middleware(['auth', 'verified', 'tenant', 'no.insecure.defaults'])->prefix('admin')->name('admin.')->group(function () {
     Route::post('/tenant-switch', [TenantSwitcherController::class, 'switch'])->name('tenant.switch');
 
     Route::get('/', [DashboardController::class, 'index'])->name('dashboard')->middleware('role:superadmin,campaign_admin,analyst,viewer');
