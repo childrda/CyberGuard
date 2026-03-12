@@ -6,6 +6,8 @@
 
 **Purpose:** Accept reported message data from the Report Phish Gmail Add-on.
 
+**Reachability:** The webhook URL must be **publicly reachable** from the internet. When a user clicks “Report Phish” in Gmail, **Google’s servers** call your backend. If the app runs on a private IP (e.g. `172.17.x.x`) or localhost, Google cannot reach it and reports will never be recorded (campaign “Reported” and “Recent reports” will stay empty). For local development, use a tunnel (e.g. [ngrok](https://ngrok.com)) and set the add-on’s `WEBHOOK_URL` (and `PHISHING_PUBLIC_URL` in Laravel) to the tunnel URL.
+
 **Authentication:** HMAC-SHA256 signature in header `X-Phish-Signature`.
 
 ### Request

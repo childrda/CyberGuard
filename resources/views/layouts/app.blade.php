@@ -32,6 +32,11 @@
     @else
         <div class="bg-slate-700 text-slate-300 text-center py-1 text-sm">Simulation sending is disabled.</div>
     @endif
+    @if(!empty($webhookLikelyUnreachable))
+        <div class="bg-amber-900/80 text-amber-200 text-center py-1.5 text-sm">
+            Report Phish will not record reports: the webhook URL is not reachable from the internet (e.g. private IP or localhost). Campaign &quot;Reported&quot; counts will stay 0 until the app is reachable—use a tunnel like <a href="https://ngrok.com" target="_blank" rel="noopener" class="underline">ngrok</a> for local dev or deploy to a public URL.
+        </div>
+    @endif
 
     <div class="flex min-h-screen">
         {{-- Left navigation - dark --}}

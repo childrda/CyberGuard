@@ -67,11 +67,13 @@ class DashboardController extends Controller
 
         $tenant = Tenant::current();
         $gamificationEnabled = $tenant?->gamification_enabled ?? false;
-        $monthStart = now()->format('Y-m').'-01 00:00:00';
-        $monthEnd = now()->endOfMonth()->format('Y-m-d 23:59:59');
+        // Top Reporter = points from reporting only (simulation_reported, reported_phish), not training/other
+        // so it stays consistent with Report Rate and campaign "Reported" column
+        $reportEventTypes = ['simulation_reported', 'reported_phish'];
         $topReporters = $gamificationEnabled && Tenant::currentId()
             ? ShieldPointsLedger::query()
-                ->whereBetween('created_at', [$monthStart, $monthEnd])
+                ->whereBetween('created_at', [$dateFrom.' 00:00:00', $dateTo.' 23:59:59'])
+                ->whereIn('event_type', $reportEventTypes)
                 ->selectRaw('user_identifier, SUM(points_delta) as total_points')
                 ->groupBy('user_identifier')
                 ->orderByDesc('total_points')

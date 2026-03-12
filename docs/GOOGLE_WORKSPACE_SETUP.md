@@ -133,6 +133,15 @@ Then in **Edit tenant** you only need to check **Enable directory sync**; the te
 
 ---
 
+## Report Phish add-on and webhook reachability
+
+If you use the **Report Phish** Gmail add-on, the add-on sends reports to your backend at `POST /api/webhook/report`. **Google’s servers** make that request, not the user’s browser. So the webhook URL (e.g. `https://your-domain.com/api/webhook/report`) must be reachable from the public internet.
+
+- **Development:** If the app runs on localhost or a private IP (e.g. `172.17.144.48`), Google cannot reach it. Campaign “Reported” counts and “Recent reports” will stay at zero. Use a tunnel such as [ngrok](https://ngrok.com): run `ngrok http 80` (or your dev port), set the add-on’s **WEBHOOK_URL** (in Apps Script project properties) to `https://your-ngrok-url.ngrok.io/api/webhook/report`, and set `PHISHING_PUBLIC_URL` in `.env` to the same base URL so links/signatures match.
+- **Production:** Deploy the app to a host with a public URL and set the add-on’s WEBHOOK_URL to that base + `/api/webhook/report`.
+
+---
+
 ## Troubleshooting
 
 | Issue | What to check |
