@@ -12,14 +12,25 @@ class PhishingTemplateSeeder extends Seeder
 {
     public function run(): void
     {
-        $landing = LandingPage::where('slug', 'default-training')->first();
-        $userId = User::first()?->id;
-        $tenantId = Tenant::where('domain', 'example.com')->first()?->id;
+        $tenant = Tenant::where('domain', 'example.com')->first();
+        $user = User::first();
+        if ($tenant && $user) {
+            self::seedDefaultTemplateForTenant($tenant, $user);
+        }
+    }
 
-        PhishingTemplate::withoutGlobalScope('tenant')->firstOrCreate(
-            ['name' => 'Sample IT Alert', 'tenant_id' => $tenantId],
+    /**
+     * Seed the default "Sample IT Alert" template for a tenant (e.g. after cyberguard:install).
+     */
+    public static function seedDefaultTemplateForTenant(Tenant $tenant, ?User $user = null): PhishingTemplate
+    {
+        $landing = LandingPage::where('slug', 'default-training')->first();
+        $userId = $user?->id;
+
+        return PhishingTemplate::withoutGlobalScope('tenant')->firstOrCreate(
+            ['name' => 'Sample IT Alert', 'tenant_id' => $tenant->id],
             [
-                'tenant_id' => $tenantId,
+                'tenant_id' => $tenant->id,
                 'subject' => 'Urgent: Verify your account',
                 'html_body' => '<p>Hi,</p><p>We detected unusual activity. <a href="#">Click here to verify your account</a> within 24 hours.</p><p>IT Support</p>',
                 'text_body' => "Hi,\nWe detected unusual activity. Click the link in this email to verify within 24 hours.\nIT Support",

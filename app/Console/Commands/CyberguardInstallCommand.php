@@ -7,6 +7,7 @@ use App\Services\CyberguardInstaller;
 use Database\Seeders\BadgeSeeder;
 use Database\Seeders\LandingPageSeeder;
 use Database\Seeders\PhishingAttackSeeder;
+use Database\Seeders\PhishingTemplateSeeder;
 use Illuminate\Console\Command;
 use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Str;
@@ -19,8 +20,7 @@ class CyberguardInstallCommand extends Command
      * @var string
      */
     protected $signature = 'cyberguard:install
-                            {--force : Run even if a tenant or superadmin already exists}
-                            {--no-interaction : Use defaults where possible; fails if required values missing}';
+                            {--force : Run even if a tenant or superadmin already exists}';
 
     /**
      * The console command description.
@@ -111,6 +111,8 @@ class CyberguardInstallCommand extends Command
         );
 
         $this->ensureLandingPage();
+        PhishingTemplateSeeder::seedDefaultTemplateForTenant($tenant, $user);
+        $this->info('Sample email template seeded for tenant.');
         $this->seedDefaultAttacksForTenant($tenant);
         $this->seedBadgesForTenant($tenant);
 
