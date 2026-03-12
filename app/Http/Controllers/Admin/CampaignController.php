@@ -125,8 +125,13 @@ class CampaignController extends Controller
     public function show(PhishingCampaign $campaign): View
     {
         $this->authorize('view', $campaign);
-        $campaign->load('template', 'targets', 'messages.events');
-        return view('admin.campaigns.show', compact('campaign'));
+        $campaign->load('template', 'targets', 'messages.events', 'messages.attack');
+        $messageIds = $campaign->messages->pluck('id');
+        $activities = \App\Models\PhishingEvent::whereIn('message_id', $messageIds)
+            ->with(['message' => fn ($q) => $q->with('attack')])
+            ->orderBy('occurred_at', 'desc')
+            ->get();
+        return view('admin.campaigns.show', compact('campaign', 'activities'));
     }
 
     public function edit(PhishingCampaign $campaign): View
