@@ -7,9 +7,11 @@ use App\Models\PhishingEvent;
 use App\Models\PhishingMessage;
 use App\Models\PhishingReport;
 use App\Models\ReportedMessage;
+use Carbon\Carbon;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Log;
+use Throwable;
 
 /**
  * Webhook for Gmail "Report Phish" add-on. Multi-tenant: resolves tenant by domain,
@@ -19,6 +21,7 @@ class ReportWebhookController extends Controller
 {
     public function __invoke(Request $request): JsonResponse
     {
+        try {
         if (! config('phishing.gmail_report_addon_enabled', true)) {
             return response()->json(['error' => 'Add-on disabled'], 503);
         }
@@ -120,6 +123,15 @@ class ReportWebhookController extends Controller
                 ->first();
         }
 
+        $messageDate = null;
+        if (! empty($data['date']) && is_string($data['date'])) {
+            try {
+                $messageDate = Carbon::parse($data['date']);
+            } catch (Throwable) {
+                $messageDate = null;
+            }
+        }
+
         $correlationId = \Illuminate\Support\Str::uuid()->toString();
         $reported = ReportedMessage::withoutGlobalScope('tenant')->create([
             'tenant_id' => $tenant?->id,
@@ -132,7 +144,7 @@ class ReportWebhookController extends Controller
             'from_address' => $fromAddress,
             'from_display' => is_array($from) ? ($from['name'] ?? null) : null,
             'to_addresses' => is_array($data['to'] ?? null) ? implode(', ', $data['to']) : ($data['to_addresses'] ?? null),
-            'message_date' => isset($data['date']) ? $data['date'] : null,
+            'message_date' => $messageDate,
             'snippet' => $snippet,
             'report_type' => $reportType,
             'source' => 'addon',
@@ -182,5 +194,19 @@ class ReportWebhookController extends Controller
             'correlation_id' => $correlationId,
             'matched_simulation' => (bool) $phishingMessage,
         ]);
+        } catch (Throwable $e) {
+            Log::error('Report webhook: unhandled exception', [
+                'message' => $e->getMessage(),
+                'exception' => get_class($e),
+                'trace_head' => substr($e->getTraceAsString(), 0, 1200),
+            ]);
+
+            $payload = ['error' => 'Webhook processing failed'];
+            if ((bool) env('PHISHING_WEBHOOK_DEBUG_SIGNATURE', false)) {
+                $payload['debug'] = ['exception' => $e->getMessage()];
+            }
+
+            return response()->json($payload, 500);
+        }
     }
 }
