@@ -34,6 +34,14 @@
         <label class="block text-sm font-medium text-slate-300">To</label>
         <input type="date" name="to" value="{{ request('to') }}" class="mt-1 rounded border border-slate-600 bg-slate-800 px-3 py-2 text-slate-100 [color-scheme:dark]">
     </div>
+    <div>
+        <label class="block text-sm font-medium text-slate-300">Per page</label>
+        <select name="per_page" class="mt-1 rounded border border-slate-600 bg-slate-800 px-3 py-2 text-slate-100 [color-scheme:dark]">
+            @foreach(($allowedPerPage ?? [10,20,40,100]) as $size)
+                <option value="{{ $size }}" @selected((int) request('per_page', $perPage ?? 20) === (int) $size)>{{ $size }}</option>
+            @endforeach
+        </select>
+    </div>
     <button type="submit" class="rounded bg-slate-700 hover:bg-slate-600 px-4 py-2 text-slate-200">Filter</button>
 </form>
 
@@ -82,5 +90,5 @@
     </table>
 </div>
 
-<div class="mt-4 text-slate-300">{{ $reports->links() }}</div>
+<div class="mt-4 text-slate-300">{{ $reports->appends(request()->query())->links() }}</div>
 @endsection

@@ -20,6 +20,12 @@ class ReportedMessageController extends Controller
 
     public function index(Request $request): View
     {
+        $allowedPerPage = [10, 20, 40, 100];
+        $perPage = (int) $request->input('per_page', 20);
+        if (! in_array($perPage, $allowedPerPage, true)) {
+            $perPage = 20;
+        }
+
         $query = ReportedMessage::with('phishingMessage.campaign');
 
         if ($request->filled('type')) {
@@ -43,9 +49,11 @@ class ReportedMessageController extends Controller
             $query->where('created_at', '<=', $request->to.' 23:59:59');
         }
 
-        $reports = $query->latest()->paginate(20);
+        $reports = $query->latest()
+            ->paginate($perPage)
+            ->appends($request->query());
 
-        return view('admin.reports.index', compact('reports'));
+        return view('admin.reports.index', compact('reports', 'perPage', 'allowedPerPage'));
     }
 
     public function show(ReportedMessage $reported): View
