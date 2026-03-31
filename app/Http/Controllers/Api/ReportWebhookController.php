@@ -36,7 +36,7 @@ class ReportWebhookController extends Controller
             Log::warning('Report webhook: tenant could not be resolved');
             return response()->json(['error' => 'Unknown tenant'], 422);
         }
-        $secret = $tenant->webhook_secret ?: config('phishing.webhook_secret');
+        $secret = trim((string) ($tenant->webhook_secret ?: config('phishing.webhook_secret')));
         if (empty($secret)) {
             Log::warning('Report webhook: no tenant or global webhook secret configured');
             return response()->json(['error' => 'Configuration error'], 500);
@@ -44,8 +44,24 @@ class ReportWebhookController extends Controller
         $signature = $request->header('X-Phish-Signature') ?? $request->header('X-Webhook-Signature') ?? '';
         $expected = 'sha256='.hash_hmac('sha256', $payload, $secret);
         if (! hash_equals($expected, $signature)) {
-            Log::warning('Report webhook: invalid signature');
-            return response()->json(['error' => 'Invalid signature'], 401);
+            $debugEnabled = (bool) env('PHISHING_WEBHOOK_DEBUG_SIGNATURE', false);
+            Log::warning('Report webhook: invalid signature', [
+                'tenant_id' => $tenant->id,
+                'tenant_domain' => $tenant->domain,
+                'received_sig_prefix' => substr((string) $signature, 0, 24),
+                'expected_sig_prefix' => substr((string) $expected, 0, 24),
+            ]);
+
+            $payload = ['error' => 'Invalid signature'];
+            if ($debugEnabled) {
+                $payload['debug'] = [
+                    'received_signature' => (string) $signature,
+                    'expected_signature' => (string) $expected,
+                    'tenant_domain' => $tenant->domain,
+                ];
+            }
+
+            return response()->json($payload, 401);
         }
 
         $data = $request->all();

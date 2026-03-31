@@ -100,8 +100,16 @@ function markAsSafe(e) {
 function sendReport(e, reportType, userActions) {
   if (typeof userActions === 'undefined') userActions = [];
   var props = PropertiesService.getScriptProperties();
-  var webhookUrl = props.getProperty('WEBHOOK_URL') || WEBHOOK_URL;
-  var secret = props.getProperty('WEBHOOK_SECRET') || WEBHOOK_SECRET;
+  var webhookUrl = (props.getProperty('WEBHOOK_URL') || WEBHOOK_URL || '').trim();
+  var secret = (props.getProperty('WEBHOOK_SECRET') || WEBHOOK_SECRET || '').trim();
+  var tenantDomain = (props.getProperty('TENANT_DOMAIN') || (typeof TENANT_DOMAIN !== 'undefined' ? TENANT_DOMAIN : '') || '').trim();
+
+  if (!webhookUrl || webhookUrl.indexOf('YOUR_APP_URL') !== -1) {
+    return showToast('Add-on not configured: WEBHOOK_URL is missing.');
+  }
+  if (!secret || secret.indexOf('YOUR_WEBHOOK_SECRET') !== -1) {
+    return showToast('Add-on not configured: WEBHOOK_SECRET is missing.');
+  }
 
   var messageId = e.messageMetadata ? e.messageMetadata.messageId : null;
   var accessToken = e.messageMetadata ? e.messageMetadata.accessToken : null;
@@ -122,6 +130,7 @@ function sendReport(e, reportType, userActions) {
 
   var payload = buildPayloadFromGmailMessage(message, reportType);
   payload.user_actions = userActions;
+  if (tenantDomain) payload.tenant_domain = tenantDomain;
 
   try {
     payload.reporter_email = Session.getActiveUser().getEmail();
@@ -139,6 +148,7 @@ function sendReport(e, reportType, userActions) {
       'X-Phish-Signature': computeSignature(body, secret)
     }
   };
+  if (tenantDomain) options.headers['X-Tenant-Domain'] = tenantDomain;
 
   try {
     var response = UrlFetchApp.fetch(webhookUrl, options);
@@ -146,15 +156,46 @@ function sendReport(e, reportType, userActions) {
     if (code >= 200 && code < 300) {
       return showToast('Report submitted. Thank you.');
     } else {
-      var details = '';
+      var apiError = '';
+      var debugInfo = '';
       try {
         var bodyJson = JSON.parse(response.getContentText());
-        details = bodyJson && bodyJson.error ? (' (' + bodyJson.error + ')') : '';
+        apiError = bodyJson && bodyJson.error ? String(bodyJson.error) : '';
+        if (bodyJson && bodyJson.debug) {
+          var got = bodyJson.debug.received_signature || '';
+          var exp = bodyJson.debug.expected_signature || '';
+          debugInfo = ' got=' + got + ' expected=' + exp;
+        }
       } catch (e2) {}
-      return showToast('Report failed. Please try again or contact IT.' + details);
+      var host = '';
+      try {
+        host = webhookUrl.replace(/^https?:\/\//i, '').split('/')[0];
+      } catch (e3) {}
+
+      var hint = '';
+      if (code === 401 || /invalid signature/i.test(apiError)) {
+        hint = 'Signature mismatch. Check WEBHOOK_SECRET in Script Properties and tenant webhook secret.';
+      } else if (code === 422 && /unknown tenant/i.test(apiError)) {
+        hint = 'Tenant not resolved. Set TENANT_DOMAIN (Script Properties) to your tenant domain.';
+      } else if (code === 500 && /configuration error/i.test(apiError)) {
+        hint = 'Server webhook config missing. Verify tenant webhook secret in CyberGuard.';
+      } else if (code === 503) {
+        hint = 'Add-on disabled on server (GMAIL_REPORT_ADDON_ENABLED=false).';
+      } else if (code === 422) {
+        hint = 'Payload validation failed. Check reporter email/domain mapping.';
+      } else {
+        hint = 'Unexpected server response.';
+      }
+
+      return showToast(
+        'Report failed [' + code + ']. ' + hint +
+        ' host=' + host +
+        ', tenant=' + (tenantDomain || 'auto') +
+        debugInfo
+      );
     }
   } catch (err) {
-    return showToast('Could not send report: ' + err.toString());
+    return showToast('Could not send report: ' + err.toString() + '. Check WEBHOOK_URL reachability.');
   }
 }
 
