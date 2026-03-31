@@ -60,9 +60,11 @@ class ProcessRemediationJob implements ShouldQueue
 
         $users = $removal->listDomainUsers($tenant->domain);
         if (empty($users)) {
+            $extra = method_exists($removal, 'getLastError') ? trim((string) $removal->getLastError()) : '';
             $this->remediationJob->update([
                 'status' => RemediationJob::STATUS_FAILED,
-                'failure_summary' => 'Could not list domain users. Check Admin SDK delegation/scopes and google_admin_user.',
+                'failure_summary' => 'Could not list domain users. Check Admin SDK delegation/scopes and google_admin_user.'
+                    .($extra !== '' ? ' '.$extra : ''),
                 'completed_at' => now(),
             ]);
             return;

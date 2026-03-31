@@ -16,15 +16,18 @@ use Illuminate\Support\Facades\Log;
 class GmailRemovalService
 {
     protected ?GoogleClient $client = null;
+    protected ?string $lastError = null;
 
     public function __construct()
     {
         if (! config('phishing.gmail_removal_enabled') || ! config('phishing.google_credentials_path')) {
+            $this->lastError = 'Gmail removal disabled or credentials path missing in config.';
             return;
         }
         $path = config('phishing.google_credentials_path');
         if (! is_file($path)) {
-            Log::warning('GmailRemovalService: credentials file not found or not readable');
+            $this->lastError = 'Credentials file not found or not readable: '.$path;
+            Log::warning('GmailRemovalService: '.$this->lastError);
             return;
         }
         try {
@@ -37,7 +40,8 @@ class GmailRemovalService
             ]);
             $this->client->setSubject(null); // set per-request when impersonating
         } catch (\Throwable $e) {
-            Log::error('GmailRemovalService: failed to init client');
+            $this->lastError = 'Failed to initialize Google client: '.$e->getMessage();
+            Log::error('GmailRemovalService: '.$this->lastError);
             $this->client = null;
         }
     }
@@ -48,6 +52,7 @@ class GmailRemovalService
     public function removeFromUserMailbox(ReportedMessage $reported): array
     {
         if (! $this->client) {
+            $this->lastError = 'Gmail removal not configured.';
             return ['ok' => false, 'error' => 'Gmail removal not configured.'];
         }
         if (! $reported->gmail_message_id || ! $reported->reporter_email) {
@@ -91,6 +96,7 @@ class GmailRemovalService
     public function removeFromAllMailboxes(ReportedMessage $reported): array
     {
         if (! $this->client) {
+            $this->lastError = 'Gmail removal not configured.';
             return ['ok' => false, 'error' => 'Gmail removal not configured.'];
         }
 
@@ -109,7 +115,8 @@ class GmailRemovalService
 
         $users = $this->listDomainUsers($domain);
         if (empty($users)) {
-            return ['ok' => false, 'error' => 'Could not list domain users. Check Admin SDK scope and delegation.'];
+            $extra = $this->lastError ? ' '.$this->lastError : '';
+            return ['ok' => false, 'error' => 'Could not list domain users. Check Admin SDK scope and delegation.'.$extra];
         }
 
         $trashed = 0;
@@ -176,9 +183,19 @@ class GmailRemovalService
             } while ($pageToken);
             return $users;
         } catch (\Throwable $e) {
-            Log::warning('GmailRemovalService listDomainUsers failed');
+            $this->lastError = $e->getMessage();
+            Log::warning('GmailRemovalService listDomainUsers failed: '.$e->getMessage(), [
+                'domain' => $domain,
+                'admin_user' => config('phishing.google_admin_user'),
+                'credentials_path' => config('phishing.google_credentials_path'),
+            ]);
             return [];
         }
+    }
+
+    public function getLastError(): ?string
+    {
+        return $this->lastError;
     }
 
     protected function extractMessageIdFromHeaders(?array $headers): ?string
