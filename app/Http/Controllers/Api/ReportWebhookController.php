@@ -91,7 +91,11 @@ class ReportWebhookController extends Controller
         }, $userActions)), 0, 20) : [];
         $headers = $data['headers'] ?? [];
         $messageIdHeader = null;
-        if (is_array($headers)) {
+        $directMessageId = $data['message_id_header'] ?? null;
+        if (is_string($directMessageId) && trim($directMessageId) !== '') {
+            $messageIdHeader = trim(mb_substr($directMessageId, 0, 500));
+        }
+        if (! $messageIdHeader && is_array($headers)) {
             foreach (['Message-ID', 'message-id'] as $key) {
                 if (! empty($headers[$key]) && is_string($headers[$key])) {
                     $messageIdHeader = trim(mb_substr($headers[$key], 0, 500));

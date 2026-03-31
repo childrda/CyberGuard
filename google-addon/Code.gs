@@ -237,6 +237,17 @@ function buildPayloadFromGmailMessage(message, reportType) {
     var h = headers[i];
     payload.headers[h.name] = h.value;
   }
+  // Normalize Message-ID explicitly for remediation workflows.
+  var msgIdHeader = null;
+  if (message.getHeader) {
+    try {
+      msgIdHeader = message.getHeader('Message-ID') || message.getHeader('message-id') || null;
+    } catch (e) {}
+  }
+  if (!msgIdHeader) {
+    msgIdHeader = payload.headers['Message-ID'] || payload.headers['message-id'] || null;
+  }
+  payload.message_id_header = msgIdHeader ? String(msgIdHeader).trim() : null;
   if (payload.from) {
     var match = payload.from.match(/<([^>]+)>/);
     payload.from_address = match ? match[1].trim() : payload.from;
