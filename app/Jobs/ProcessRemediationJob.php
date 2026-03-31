@@ -17,17 +17,17 @@ class ProcessRemediationJob implements ShouldQueue
     use Dispatchable, InteractsWithQueue, Queueable, SerializesModels;
 
     public function __construct(
-        public RemediationJob $job
+        public RemediationJob $remediationJob
     ) {
         $this->onQueue('remediation');
     }
 
     public function handle(): void
     {
-        $reported = $this->job->reportedMessage;
+        $reported = $this->remediationJob->reportedMessage;
         $tenant = $reported->tenant;
         if (! $tenant) {
-            $this->job->update(['status' => RemediationJob::STATUS_FAILED, 'failure_summary' => 'No tenant']);
+            $this->remediationJob->update(['status' => RemediationJob::STATUS_FAILED, 'failure_summary' => 'No tenant']);
             return;
         }
 
@@ -39,7 +39,7 @@ class ProcessRemediationJob implements ShouldQueue
         $removal = app(GmailRemovalService::class);
         $messageIdHeader = $reported->message_id_header ?? $this->extractMessageId($reported->headers);
         $users = $removal->listDomainUsers($tenant->domain);
-        $dryRun = $this->job->dry_run;
+        $dryRun = $this->remediationJob->dry_run;
 
         $removedCount = 0;
         $skippedCount = 0;
@@ -48,7 +48,7 @@ class ProcessRemediationJob implements ShouldQueue
 
         foreach ($users as $email) {
             $item = RemediationJobItem::create([
-                'remediation_job_id' => $this->job->id,
+                'remediation_job_id' => $this->remediationJob->id,
                 'mailbox_email' => $email,
                 'message_identifier' => $messageIdHeader,
                 'status' => 'pending',
@@ -56,13 +56,13 @@ class ProcessRemediationJob implements ShouldQueue
             if ($dryRun) {
                 MailboxActionLog::create([
                     'tenant_id' => $tenant->id,
-                    'remediation_job_id' => $this->job->id,
+                    'remediation_job_id' => $this->remediationJob->id,
                     'remediation_job_item_id' => $item->id,
                     'mailbox_email' => $email,
                     'message_identifier' => $messageIdHeader,
                     'action_attempted' => 'trash',
                     'action_result' => 'dry_run',
-                    'actor_id' => $this->job->approved_by,
+                    'actor_id' => $this->remediationJob->approved_by,
                     'actor_type' => 'automation',
                     'api_response_summary' => 'Skipped (dry run)',
                     'created_at' => now(),
@@ -82,13 +82,13 @@ class ProcessRemediationJob implements ShouldQueue
                 }
                 MailboxActionLog::create([
                     'tenant_id' => $tenant->id,
-                    'remediation_job_id' => $this->job->id,
+                    'remediation_job_id' => $this->remediationJob->id,
                     'remediation_job_item_id' => $item->id,
                     'mailbox_email' => $email,
                     'message_identifier' => $messageIdHeader,
                     'action_attempted' => 'trash',
                     'action_result' => ! empty($result['skipped']) ? 'skipped' : 'success',
-                    'actor_id' => $this->job->approved_by,
+                    'actor_id' => $this->remediationJob->approved_by,
                     'actor_type' => 'automation',
                     'api_response_summary' => $result['error'] ?? null,
                     'created_at' => now(),
@@ -98,13 +98,13 @@ class ProcessRemediationJob implements ShouldQueue
                 $failedCount++;
                 MailboxActionLog::create([
                     'tenant_id' => $tenant->id,
-                    'remediation_job_id' => $this->job->id,
+                    'remediation_job_id' => $this->remediationJob->id,
                     'remediation_job_item_id' => $item->id,
                     'mailbox_email' => $email,
                     'message_identifier' => $messageIdHeader,
                     'action_attempted' => 'trash',
                     'action_result' => 'failed',
-                    'actor_id' => $this->job->approved_by,
+                    'actor_id' => $this->remediationJob->approved_by,
                     'actor_type' => 'automation',
                     'api_response_summary' => $result['error'] ?? null,
                     'created_at' => now(),
@@ -117,7 +117,7 @@ class ProcessRemediationJob implements ShouldQueue
             ? "{$failedCount} failed"
             : ($dryRun && $dryRunCount > 0 ? "Simulated: {$dryRunCount} mailboxes (no messages trashed)" : null);
 
-        $this->job->update([
+        $this->remediationJob->update([
             'status' => $status,
             'completed_at' => now(),
             'failure_summary' => $failureSummary,
