@@ -49,7 +49,24 @@ class ProcessRemediationJob implements ShouldQueue
 
         $removal = app(GmailRemovalService::class);
         $messageIdHeader = $reported->message_id_header ?? $this->extractMessageId($reported->headers);
+        if (! $messageIdHeader) {
+            $this->remediationJob->update([
+                'status' => RemediationJob::STATUS_FAILED,
+                'failure_summary' => 'No Message-ID header available; cannot perform domain-wide remediation.',
+                'completed_at' => now(),
+            ]);
+            return;
+        }
+
         $users = $removal->listDomainUsers($tenant->domain);
+        if (empty($users)) {
+            $this->remediationJob->update([
+                'status' => RemediationJob::STATUS_FAILED,
+                'failure_summary' => 'Could not list domain users. Check Admin SDK delegation/scopes and google_admin_user.',
+                'completed_at' => now(),
+            ]);
+            return;
+        }
         $dryRun = $this->remediationJob->dry_run;
 
         $removedCount = 0;
@@ -124,9 +141,14 @@ class ProcessRemediationJob implements ShouldQueue
         }
 
         $status = $this->resolveFinalStatus($dryRun, $removedCount, $skippedCount, $dryRunCount, $failedCount);
-        $failureSummary = $failedCount > 0
-            ? "{$failedCount} failed"
-            : ($dryRun && $dryRunCount > 0 ? "Simulated: {$dryRunCount} mailboxes (no messages trashed)" : null);
+        $failureSummary = null;
+        if ($failedCount > 0) {
+            $failureSummary = "{$failedCount} failed";
+        } elseif ($removedCount === 0 && $skippedCount > 0 && ! $dryRun) {
+            $failureSummary = "No mailbox copy found to remove ({$skippedCount} skipped)";
+        } elseif ($dryRun && $dryRunCount > 0) {
+            $failureSummary = "Simulated: {$dryRunCount} mailboxes (no messages trashed)";
+        }
 
         $this->remediationJob->update([
             'status' => $status,
@@ -143,6 +165,9 @@ class ProcessRemediationJob implements ShouldQueue
     {
         if ($dryRun && $dryRunCount > 0 && $removedCount === 0 && $failedCount === 0) {
             return RemediationJob::STATUS_DRY_RUN_COMPLETED;
+        }
+        if (! $dryRun && $removedCount === 0 && $skippedCount > 0 && $failedCount === 0) {
+            return RemediationJob::STATUS_FAILED;
         }
         if ($failedCount > 0) {
             return $removedCount > 0 ? RemediationJob::STATUS_PARTIALLY_FAILED : RemediationJob::STATUS_FAILED;
