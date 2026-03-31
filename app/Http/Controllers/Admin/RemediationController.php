@@ -17,12 +17,19 @@ class RemediationController extends Controller
 
     public function index(Request $request): View
     {
+        $allowedPerPage = [10, 20, 40, 100];
+        $perPage = (int) $request->input('per_page', 20);
+        if (! in_array($perPage, $allowedPerPage, true)) {
+            $perPage = 20;
+        }
+
         $jobs = RemediationJob::with('reportedMessage', 'approver')
             ->when($request->filled('status'), fn ($q) => $q->where('status', $request->status))
             ->latest()
-            ->paginate(20);
+            ->paginate($perPage)
+            ->appends($request->query());
 
-        return view('admin.remediation.index', compact('jobs'));
+        return view('admin.remediation.index', compact('jobs', 'perPage', 'allowedPerPage'));
     }
 
     public function show(RemediationJob $job): View

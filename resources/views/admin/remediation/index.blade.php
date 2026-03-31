@@ -22,6 +22,14 @@
             <option value="failed" @selected(request('status') === 'failed')>Failed</option>
         </select>
     </div>
+    <div>
+        <label class="block text-sm font-medium text-slate-400">Per page</label>
+        <select name="per_page" class="mt-1 rounded border-slate-600 bg-slate-800 text-slate-200 text-sm">
+            @foreach(($allowedPerPage ?? [10, 20, 40, 100]) as $size)
+                <option value="{{ $size }}" @selected((int) request('per_page', $perPage ?? 20) === (int) $size)>{{ $size }}</option>
+            @endforeach
+        </select>
+    </div>
     <button type="submit" class="rounded bg-blue-600 px-4 py-2 text-white text-sm hover:bg-blue-700">Filter</button>
 </form>
 
@@ -51,5 +59,5 @@
         </tbody>
     </table>
 </div>
-<div class="mt-4 text-slate-400">{{ $jobs->links() }}</div>
+<div class="mt-4 text-slate-400">{{ $jobs->appends(request()->query())->links() }}</div>
 @endsection
