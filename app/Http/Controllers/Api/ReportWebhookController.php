@@ -45,11 +45,15 @@ class ReportWebhookController extends Controller
         $expected = 'sha256='.hash_hmac('sha256', $payload, $secret);
         if (! hash_equals($expected, $signature)) {
             $debugEnabled = (bool) env('PHISHING_WEBHOOK_DEBUG_SIGNATURE', false);
+            $incomingBodySha = (string) ($request->header('X-Body-SHA256') ?? '');
+            $serverBodySha = hash('sha256', $payload);
             Log::warning('Report webhook: invalid signature', [
                 'tenant_id' => $tenant->id,
                 'tenant_domain' => $tenant->domain,
                 'received_sig_prefix' => substr((string) $signature, 0, 24),
                 'expected_sig_prefix' => substr((string) $expected, 0, 24),
+                'incoming_body_sha_prefix' => substr($incomingBodySha, 0, 16),
+                'server_body_sha_prefix' => substr($serverBodySha, 0, 16),
             ]);
 
             $payload = ['error' => 'Invalid signature'];
@@ -58,6 +62,8 @@ class ReportWebhookController extends Controller
                     'received_signature' => (string) $signature,
                     'expected_signature' => (string) $expected,
                     'tenant_domain' => $tenant->domain,
+                    'incoming_body_sha256' => $incomingBodySha,
+                    'server_body_sha256' => $serverBodySha,
                 ];
             }
 

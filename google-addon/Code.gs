@@ -11,6 +11,18 @@ var WEBHOOK_SECRET = 'YOUR_WEBHOOK_SECRET'; // Set in project properties (File >
  * Build the add-on UI when user opens an email.
  */
 function buildAddOn(e) {
+  if (!e || !e.messageMetadata) {
+    var debugCard = CardService.newCardBuilder()
+      .setHeader(CardService.newCardHeader().setTitle('CyberGuard Report Phish'))
+      .addSection(CardService.newCardSection()
+        .addWidget(CardService.newTextParagraph()
+          .setText('This function is triggered by Gmail when viewing a message. Do not run buildAddOn() directly from the script editor.')))
+      .build();
+    return CardService.newActionResponseBuilder()
+      .setNavigation(CardService.newNavigation().pushCard(debugCard))
+      .build();
+  }
+
   var accessToken = e.messageMetadata.accessToken;
   var messageId = e.messageMetadata.messageId;
 
@@ -139,13 +151,15 @@ function sendReport(e, reportType, userActions) {
   }
 
   var body = JSON.stringify(payload);
+  var bodySha = computeSha256(body);
   var options = {
     method: 'post',
     contentType: 'application/json',
     payload: body,
     muteHttpExceptions: true,
     headers: {
-      'X-Phish-Signature': computeSignature(body, secret)
+      'X-Phish-Signature': computeSignature(body, secret),
+      'X-Body-SHA256': bodySha
     }
   };
   if (tenantDomain) options.headers['X-Tenant-Domain'] = tenantDomain;
@@ -234,9 +248,14 @@ function buildPayloadFromGmailMessage(message, reportType) {
 }
 
 function computeSignature(bodyString, secret) {
-  var sig = Utilities.computeHmacSha256Signature(bodyString, secret);
+  var sig = Utilities.computeHmacSha256Signature(bodyString, secret, Utilities.Charset.UTF_8);
   var hex = sig.map(function(b) { return ('0' + (b & 0xFF).toString(16)).slice(-2); }).join('');
   return 'sha256=' + hex;
+}
+
+function computeSha256(bodyString) {
+  var dig = Utilities.computeDigest(Utilities.DigestAlgorithm.SHA_256, bodyString, Utilities.Charset.UTF_8);
+  return dig.map(function(b) { return ('0' + (b & 0xFF).toString(16)).slice(-2); }).join('');
 }
 
 function showToast(message) {
