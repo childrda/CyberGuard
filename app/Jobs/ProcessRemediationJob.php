@@ -58,13 +58,16 @@ class ProcessRemediationJob implements ShouldQueue
             return;
         }
 
-        $users = $removal->listDomainUsers($tenant->domain);
+        // Default remediation job scope: reporter mailbox only.
+        // Domain-wide removal remains available via dedicated "Remove from all mailboxes" action.
+        $users = [];
+        if (! empty($reported->reporter_email) && is_string($reported->reporter_email)) {
+            $users = [trim($reported->reporter_email)];
+        }
         if (empty($users)) {
-            $extra = method_exists($removal, 'getLastError') ? trim((string) $removal->getLastError()) : '';
             $this->remediationJob->update([
                 'status' => RemediationJob::STATUS_FAILED,
-                'failure_summary' => 'Could not list domain users. Check Admin SDK delegation/scopes and google_admin_user.'
-                    .($extra !== '' ? ' '.$extra : ''),
+                'failure_summary' => 'Reporter email is missing; cannot run mailbox remediation.',
                 'completed_at' => now(),
             ]);
             return;

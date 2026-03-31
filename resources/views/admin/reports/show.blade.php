@@ -102,7 +102,7 @@
 
     @if($reported->analyst_status === 'analyst_confirmed_real')
         <div class="mt-6 pt-6 border-t border-slate-200">
-            <h3 class="text-sm font-medium text-slate-700 mb-2">Remediation job</h3>
+            <h3 class="text-sm font-medium text-slate-700 mb-2">Remediation job (reporter mailbox)</h3>
             @php
                 $approvedJob = $reported->remediationJobs()->where('status', \App\Models\RemediationJob::STATUS_APPROVED_FOR_REMOVAL)->latest()->first();
                 $latestJob = $reported->remediationJobs()->latest()->first();
@@ -113,15 +113,15 @@
             @if(! $approvedJob)
                 <form method="post" action="{{ route('admin.remediation.approve', $reported) }}" class="space-y-2">
                     @csrf
-                    <label class="inline-flex items-center"><input type="checkbox" name="dry_run" value="1" class="rounded border-slate-300"> Dry run (log only, do not trash)</label>
+                    <label class="inline-flex items-center"><input type="checkbox" name="dry_run" value="1" class="rounded border-slate-300"> Dry run (reporter mailbox only; log only, do not trash)</label>
                     <div><textarea name="approval_notes" rows="2" class="w-full rounded border-slate-300 text-sm" placeholder="Approval notes (optional)"></textarea></div>
-                    <button type="submit" class="rounded-md bg-slate-700 px-4 py-2 text-sm font-medium text-white">Approve for removal</button>
+                    <button type="submit" class="rounded-md bg-slate-700 px-4 py-2 text-sm font-medium text-white">Approve reporter removal</button>
                 </form>
             @else
                 <p class="text-sm text-slate-600 mb-2">Job approved. <a href="{{ route('admin.remediation.show', $approvedJob) }}" class="text-blue-600 hover:underline">View job #{{ $approvedJob->id }}</a></p>
-                <form method="post" action="{{ route('admin.remediation.run', $reported) }}" onsubmit="return confirm('Queue remediation to remove this message from all mailboxes?');">
+                <form method="post" action="{{ route('admin.remediation.run', $reported) }}" onsubmit="return confirm('Queue remediation to remove this message from the reporter mailbox?');">
                     @csrf
-                    <button type="submit" class="rounded-md bg-slate-800 px-4 py-2 text-sm font-medium text-white">Run remediation</button>
+                    <button type="submit" class="rounded-md bg-slate-800 px-4 py-2 text-sm font-medium text-white">Run reporter remediation</button>
                 </form>
             @endif
         </div>
