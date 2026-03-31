@@ -17,11 +17,19 @@ class AttackController extends Controller
 {
     public function index(Request $request): View
     {
+        $allowedPerPage = [10, 20, 40, 100];
+        $perPage = (int) $request->input('per_page', 20);
+        if (! in_array($perPage, $allowedPerPage, true)) {
+            $perPage = 20;
+        }
+
         $query = PhishingAttack::query()
             ->when($request->input('difficulty'), fn ($q) => $q->where('difficulty_rating', $request->difficulty))
             ->when($request->input('active'), fn ($q) => $q->where('active', $request->active === '1'));
-        $attacks = $query->orderBy('difficulty_rating')->orderBy('name')->paginate(20);
-        return view('admin.attacks.index', compact('attacks'));
+        $attacks = $query->orderBy('difficulty_rating')->orderBy('name')
+            ->paginate($perPage)
+            ->appends($request->query());
+        return view('admin.attacks.index', compact('attacks', 'perPage', 'allowedPerPage'));
     }
 
     public function create(): View

@@ -11,6 +11,12 @@ class AuditLogController extends Controller
 {
     public function index(Request $request): View
     {
+        $allowedPerPage = [10, 20, 40, 100];
+        $perPage = (int) $request->input('per_page', 20);
+        if (! in_array($perPage, $allowedPerPage, true)) {
+            $perPage = 20;
+        }
+
         $logs = AuditLog::with('user')
             ->when($request->input('action'), fn ($q) => $q->where('action', $request->action))
             ->when($request->input('user_id'), fn ($q) => $q->where('user_id', $request->user_id))
@@ -18,8 +24,9 @@ class AuditLogController extends Controller
             ->when($request->input('from'), fn ($q) => $q->where('created_at', '>=', $request->from))
             ->when($request->input('to'), fn ($q) => $q->where('created_at', '<=', $request->to.' 23:59:59'))
             ->orderByDesc('created_at')
-            ->paginate(50);
+            ->paginate($perPage)
+            ->appends($request->query());
 
-        return view('admin.audit.index', compact('logs'));
+        return view('admin.audit.index', compact('logs', 'perPage', 'allowedPerPage'));
     }
 }

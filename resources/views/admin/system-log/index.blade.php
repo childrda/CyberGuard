@@ -8,6 +8,18 @@
     <p class="text-slate-400">Recent errors (e.g. mail failures) for administrators</p>
 </div>
 
+<form method="get" class="mb-6 flex gap-4 flex-wrap items-end">
+    <div>
+        <label class="block text-sm font-medium text-slate-300">Per page</label>
+        <select name="per_page" class="mt-1 rounded border border-slate-600 bg-slate-800 px-3 py-2 text-slate-100 text-sm">
+            @foreach(($allowedPerPage ?? [10,20,40,100]) as $size)
+                <option value="{{ $size }}" @selected((int) request('per_page', $perPage ?? 20) === (int) $size)>{{ $size }}</option>
+            @endforeach
+        </select>
+    </div>
+    <button type="submit" class="rounded bg-slate-700 hover:bg-slate-600 px-4 py-2 text-slate-200 text-sm">Apply</button>
+</form>
+
 <div class="rounded-lg border border-slate-600 bg-slate-800/50 overflow-hidden">
     <table class="min-w-full divide-y divide-slate-600">
         <thead class="bg-slate-800">
@@ -41,5 +53,5 @@
     </table>
 </div>
 
-<div class="mt-4 text-slate-300">{{ $logs->links() }}</div>
+<div class="mt-4 text-slate-300">{{ $logs->appends(request()->query())->links() }}</div>
 @endsection

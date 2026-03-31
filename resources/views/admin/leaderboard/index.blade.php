@@ -31,6 +31,14 @@
             </select>
         </div>
     @endif
+    <div>
+        <label class="block text-sm font-medium text-slate-400">Per page</label>
+        <select name="per_page" onchange="this.form.submit()" class="mt-1 rounded border-slate-600 bg-slate-800 text-slate-200 text-sm px-3 py-2">
+            @foreach(($allowedPerPage ?? [10,20,40,100]) as $size)
+                <option value="{{ $size }}" @selected((int) request('per_page', $perPage ?? 20) === (int) $size)>{{ $size }}</option>
+            @endforeach
+        </select>
+    </div>
     <input type="hidden" name="scope" value="{{ $scope }}">
 </form>
 
@@ -56,7 +64,8 @@
         </tbody>
     </table>
 </div>
-@if(empty($leaderboard) && \App\Models\Tenant::currentId())
+<div class="mt-4 text-slate-300">{{ $leaderboard->appends(request()->query())->links() }}</div>
+@if($leaderboard->isEmpty() && \App\Models\Tenant::currentId())
     <p class="mt-4 text-slate-500 text-sm">No points in this period yet. Points are recorded when users report simulations, complete training, or interact with simulations.</p>
 @endif
 @endif

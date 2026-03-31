@@ -15,20 +15,31 @@ class ScorePeriodController extends Controller
         protected ScorePeriodService $scorePeriods
     ) {}
 
-    public function index(): View
+    public function index(Request $request): View
     {
         $tenant = \App\Models\Tenant::current();
         $tenantId = $tenant?->id;
         $gamificationEnabled = $tenant?->gamification_enabled ?? false;
+        $allowedPerPage = [10, 20, 40, 100];
+        $perPage = (int) $request->input('per_page', 20);
+        if (! in_array($perPage, $allowedPerPage, true)) {
+            $perPage = 20;
+        }
         if ($tenantId === null) {
-            $periods = collect();
+            $periods = ScorePeriod::whereRaw('1=0')->paginate($perPage);
         } else {
-            $periods = $this->scorePeriods->listForTenant($tenantId, 50);
+            $periods = ScorePeriod::withoutGlobalScope('tenant')
+                ->where('tenant_id', $tenantId)
+                ->orderByDesc('end_date')
+                ->paginate($perPage)
+                ->appends($request->query());
         }
 
         return view('admin.score-periods.index', [
             'periods' => $periods,
             'gamificationEnabled' => $gamificationEnabled,
+            'perPage' => $perPage,
+            'allowedPerPage' => $allowedPerPage,
         ]);
     }
 

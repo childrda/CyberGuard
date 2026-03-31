@@ -25,6 +25,14 @@
             <option value="5" @selected(request('difficulty') === '5')>5 – Very realistic</option>
         </select>
     </div>
+    <div>
+        <label class="block text-sm font-medium text-slate-300">Per page</label>
+        <select name="per_page" class="mt-1 rounded border border-slate-600 bg-slate-800 px-3 py-2 text-slate-100 text-sm">
+            @foreach(($allowedPerPage ?? [10,20,40,100]) as $size)
+                <option value="{{ $size }}" @selected((int) request('per_page', $perPage ?? 20) === (int) $size)>{{ $size }}</option>
+            @endforeach
+        </select>
+    </div>
     <button type="submit" class="rounded bg-slate-700 hover:bg-slate-600 px-4 py-2 text-slate-200 text-sm">Filter</button>
 </form>
 
@@ -58,5 +66,5 @@
     </table>
 </div>
 
-<div class="mt-4 text-slate-300">{{ $attacks->links() }}</div>
+<div class="mt-4 text-slate-300">{{ $attacks->appends(request()->query())->links() }}</div>
 @endsection

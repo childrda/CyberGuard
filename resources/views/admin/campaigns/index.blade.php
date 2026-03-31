@@ -13,9 +13,29 @@
     @endcan
 </div>
 
-@if(request('status'))
-    <p class="mb-4 text-sm">Filter: <span class="font-medium">{{ request('status') }}</span> <a href="{{ route('admin.campaigns.index') }}" class="text-slate-600">Clear</a></p>
-@endif
+<form method="get" class="mb-4 flex gap-3 flex-wrap items-end">
+    <div>
+        <label class="block text-sm font-medium text-slate-500">Status</label>
+        <select name="status" class="mt-1 rounded border border-slate-300 bg-white px-3 py-2 text-slate-800 text-sm">
+            <option value="">All</option>
+            @foreach(['draft','approved','sending','completed','cancelled'] as $status)
+                <option value="{{ $status }}" @selected(request('status') === $status)>{{ ucfirst($status) }}</option>
+            @endforeach
+        </select>
+    </div>
+    <div>
+        <label class="block text-sm font-medium text-slate-500">Per page</label>
+        <select name="per_page" class="mt-1 rounded border border-slate-300 bg-white px-3 py-2 text-slate-800 text-sm">
+            @foreach(($allowedPerPage ?? [10,20,40,100]) as $size)
+                <option value="{{ $size }}" @selected((int) request('per_page', $perPage ?? 20) === (int) $size)>{{ $size }}</option>
+            @endforeach
+        </select>
+    </div>
+    <button type="submit" class="rounded bg-slate-700 px-4 py-2 text-white text-sm hover:bg-slate-600">Filter</button>
+    @if(request()->hasAny(['status','per_page']))
+        <a href="{{ route('admin.campaigns.index') }}" class="text-slate-600 text-sm hover:underline">Clear</a>
+    @endif
+</form>
 
 <div class="rounded-lg border border-slate-200 bg-white shadow-sm overflow-hidden">
     <table class="min-w-full divide-y divide-slate-200">
@@ -55,5 +75,5 @@
     </table>
 </div>
 
-<div class="mt-4">{{ $campaigns->links() }}</div>
+<div class="mt-4">{{ $campaigns->appends(request()->query())->links() }}</div>
 @endsection

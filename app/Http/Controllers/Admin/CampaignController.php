@@ -25,12 +25,19 @@ class CampaignController extends Controller
 
     public function index(Request $request): View
     {
+        $allowedPerPage = [10, 20, 40, 100];
+        $perPage = (int) $request->input('per_page', 20);
+        if (! in_array($perPage, $allowedPerPage, true)) {
+            $perPage = 20;
+        }
+
         $campaigns = PhishingCampaign::with('template', 'creator')
             ->when($request->input('status'), fn ($q) => $q->where('status', $request->status))
             ->latest()
-            ->paginate(15);
+            ->paginate($perPage)
+            ->appends($request->query());
 
-        return view('admin.campaigns.index', compact('campaigns'));
+        return view('admin.campaigns.index', compact('campaigns', 'perPage', 'allowedPerPage'));
     }
 
     public function create(): View
