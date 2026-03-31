@@ -66,6 +66,7 @@ class CyberguardInstaller
                 'domain' => $input['tenant_domain'],
                 'slug' => $input['tenant_slug'],
                 'allowed_domains' => $input['allowed_domains'],
+                'webhook_secret' => config('phishing.webhook_secret') ?: Str::random(64),
                 'remediation_policy' => 'analyst_approval_required',
                 'active' => true,
             ]);

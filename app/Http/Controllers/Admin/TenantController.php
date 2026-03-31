@@ -39,6 +39,8 @@ class TenantController extends Controller
             'domain' => ['required', 'string', 'max:255', 'unique:tenants,domain'],
             'slug' => ['nullable', 'string', 'max:255', 'unique:tenants,slug', 'regex:/^[a-z0-9\-]+$/'],
             'remediation_policy' => ['required', 'in:report_only,analyst_approval_required,auto_remove_confirmed_phish'],
+            'webhook_secret' => ['nullable', 'string', 'max:255'],
+            'generate_webhook_secret' => ['nullable', 'boolean'],
         ]);
 
         $slug = $validated['slug'] ?? Str::slug($validated['domain']);
@@ -46,11 +48,17 @@ class TenantController extends Controller
             $slug = $slug.'-'.Str::random(4);
         }
 
+        $webhookSecret = trim((string) ($validated['webhook_secret'] ?? ''));
+        if ((bool) ($validated['generate_webhook_secret'] ?? false) || $webhookSecret === '') {
+            $webhookSecret = Str::random(64);
+        }
+
         $tenant = Tenant::create([
             'name' => $validated['name'],
             'domain' => strtolower($validated['domain']),
             'slug' => $slug,
             'remediation_policy' => $validated['remediation_policy'],
+            'webhook_secret' => $webhookSecret,
             'active' => true,
         ]);
 
@@ -137,6 +145,8 @@ class TenantController extends Controller
             'slug' => ['required', 'string', 'max:255', 'regex:/^[a-z0-9\-]+$/', 'unique:tenants,slug,'.$tenant->id],
             'allowed_domains' => ['nullable', 'string', 'max:2000'],
             'remediation_policy' => ['required', 'in:report_only,analyst_approval_required,auto_remove_confirmed_phish'],
+            'webhook_secret' => ['nullable', 'string', 'max:255'],
+            'generate_webhook_secret' => ['nullable', 'boolean'],
             'google_credentials_file' => ['nullable', 'file', 'mimes:json', 'max:102400'],
             'google_credentials_path' => ['nullable', 'string', 'max:500'],
             'google_admin_user' => ['nullable', 'email', 'max:255'],
@@ -166,12 +176,21 @@ class TenantController extends Controller
             $credentialsPath = trim($validated['google_credentials_path']);
         }
 
+        $webhookSecret = $tenant->webhook_secret;
+        $newWebhookSecret = trim((string) ($validated['webhook_secret'] ?? ''));
+        if ((bool) ($validated['generate_webhook_secret'] ?? false)) {
+            $webhookSecret = Str::random(64);
+        } elseif ($newWebhookSecret !== '') {
+            $webhookSecret = $newWebhookSecret;
+        }
+
         $tenant->update([
             'name' => $validated['name'],
             'domain' => strtolower($validated['domain']),
             'slug' => $validated['slug'],
             'allowed_domains' => $allowedList,
             'remediation_policy' => $validated['remediation_policy'],
+            'webhook_secret' => $webhookSecret,
             'google_credentials_path' => $credentialsPath,
             'google_admin_user' => trim((string) ($validated['google_admin_user'] ?? '')) !== '' ? trim($validated['google_admin_user']) : $tenant->google_admin_user,
             'directory_sync_enabled' => (bool) ($validated['directory_sync_enabled'] ?? false),

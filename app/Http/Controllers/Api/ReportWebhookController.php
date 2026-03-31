@@ -36,12 +36,13 @@ class ReportWebhookController extends Controller
             Log::warning('Report webhook: tenant could not be resolved');
             return response()->json(['error' => 'Unknown tenant'], 422);
         }
-        if (empty($tenant->webhook_secret)) {
-            Log::warning('Report webhook: tenant has no webhook secret');
+        $secret = $tenant->webhook_secret ?: config('phishing.webhook_secret');
+        if (empty($secret)) {
+            Log::warning('Report webhook: no tenant or global webhook secret configured');
             return response()->json(['error' => 'Configuration error'], 500);
         }
         $signature = $request->header('X-Phish-Signature') ?? $request->header('X-Webhook-Signature') ?? '';
-        $expected = 'sha256='.hash_hmac('sha256', $payload, $tenant->webhook_secret);
+        $expected = 'sha256='.hash_hmac('sha256', $payload, $secret);
         if (! hash_equals($expected, $signature)) {
             Log::warning('Report webhook: invalid signature');
             return response()->json(['error' => 'Invalid signature'], 401);

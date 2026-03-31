@@ -146,7 +146,12 @@ function sendReport(e, reportType, userActions) {
     if (code >= 200 && code < 300) {
       return showToast('Report submitted. Thank you.');
     } else {
-      return showToast('Report failed. Please try again or contact IT.');
+      var details = '';
+      try {
+        var bodyJson = JSON.parse(response.getContentText());
+        details = bodyJson && bodyJson.error ? (' (' + bodyJson.error + ')') : '';
+      } catch (e2) {}
+      return showToast('Report failed. Please try again or contact IT.' + details);
     }
   } catch (err) {
     return showToast('Could not send report: ' + err.toString());

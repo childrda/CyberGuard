@@ -33,6 +33,21 @@
         <p class="mt-1 text-xs text-slate-500">Short identifier for URLs/API. Lowercase letters, numbers, hyphens only.</p>
         @error('slug')<p class="mt-1 text-sm text-red-400">{{ $message }}</p>@enderror
     </div>
+    <div class="rounded border border-slate-600 bg-slate-800/50 p-4">
+        <h3 class="text-sm font-medium text-slate-300 mb-2">Webhook secret</h3>
+        <label for="webhook_secret" class="block text-sm font-medium text-slate-300">Webhook secret (optional)</label>
+        <input type="text" name="webhook_secret" id="webhook_secret" value="{{ old('webhook_secret') }}"
+            class="mt-1 w-full rounded border border-slate-600 bg-slate-800 px-3 py-2 text-slate-100 placeholder-slate-500"
+            placeholder="Leave blank to auto-generate">
+        <p class="mt-1 text-xs text-slate-500">Used to verify signatures from the Gmail Report Phish add-on.</p>
+        @error('webhook_secret')<p class="mt-1 text-sm text-red-400">{{ $message }}</p>@enderror
+        <div class="mt-3 flex items-center gap-2">
+            <input type="hidden" name="generate_webhook_secret" value="0">
+            <input type="checkbox" name="generate_webhook_secret" id="generate_webhook_secret" value="1" {{ old('generate_webhook_secret', '1') ? 'checked' : '' }}
+                class="rounded border-slate-500 bg-slate-700 text-blue-500 focus:ring-blue-500">
+            <label for="generate_webhook_secret" class="text-sm text-slate-300">Generate a strong secret automatically</label>
+        </div>
+    </div>
     <div>
         <label for="remediation_policy" class="block text-sm font-medium text-slate-300">Remediation policy</label>
         <select name="remediation_policy" id="remediation_policy"
