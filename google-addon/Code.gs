@@ -168,7 +168,7 @@ function sendReport(e, reportType, userActions) {
     var response = UrlFetchApp.fetch(webhookUrl, options);
     var code = response.getResponseCode();
     if (code >= 200 && code < 300) {
-      return showToast('Report submitted. Thank you.');
+      return showToastAndReset('Report submitted. Thank you.');
     } else {
       var apiError = '';
       var debugInfo = '';
@@ -261,5 +261,23 @@ function computeSha256(bodyString) {
 function showToast(message) {
   return CardService.newActionResponseBuilder()
     .setNotification(CardService.newNotification().setText(message))
+    .build();
+}
+
+function showToastAndReset(message) {
+  var doneCard = CardService.newCardBuilder()
+    .setHeader(CardService.newCardHeader().setTitle('CyberGuard Report Phish'))
+    .addSection(
+      CardService.newCardSection()
+        .addWidget(CardService.newTextParagraph().setText('Report submitted. You can close this panel.'))
+    )
+    .build();
+
+  var nav = CardService.newNavigation().updateCard(doneCard);
+
+  return CardService.newActionResponseBuilder()
+    .setNavigation(nav)
+    .setNotification(CardService.newNotification().setText(message))
+    .setStateChanged(true)
     .build();
 }

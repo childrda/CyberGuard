@@ -5,8 +5,8 @@
 @section('content')
 <div class="mb-6 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
     <div>
-        <h1 class="text-2xl font-bold">Report #{{ $reported->id }}</h1>
-        <p class="text-slate-600 mt-0.5">{{ $reported->reporter_email }}</p>
+        <h1 class="text-2xl font-bold text-white">Report #{{ $reported->id }}</h1>
+        <p class="text-slate-300 mt-0.5">{{ $reported->reporter_email }}</p>
     </div>
     <div class="flex flex-wrap gap-2">
         @if($reported->phishing_message_id)
@@ -32,12 +32,12 @@
 <div class="rounded-lg border border-slate-200 bg-white p-6 mb-6">
     <h2 class="text-sm font-semibold text-slate-500 uppercase tracking-wide mb-4">Message</h2>
     <dl class="grid gap-3 sm:grid-cols-1">
-        <div><dt class="text-sm text-slate-500">Subject</dt><dd class="font-medium">{{ $reported->subject ?? '—' }}</dd></div>
-        <div><dt class="text-sm text-slate-500">From</dt><dd>{{ $reported->from_address ?? '—' }}</dd></div>
+        <div><dt class="text-sm text-slate-500">Subject</dt><dd class="font-medium text-slate-900">{{ $reported->subject ?? '—' }}</dd></div>
+        <div><dt class="text-sm text-slate-500">From</dt><dd class="text-slate-900">{{ $reported->from_address ?? '—' }}</dd></div>
         <div><dt class="text-sm text-slate-500">To</dt><dd class="text-slate-700">{{ $reported->to_addresses ?? '—' }}</dd></div>
-        <div><dt class="text-sm text-slate-500">Reported</dt><dd>{{ $reported->created_at->toDateTimeString() }}</dd></div>
+        <div><dt class="text-sm text-slate-500">Reported</dt><dd class="text-slate-900">{{ $reported->created_at->toDateTimeString() }}</dd></div>
         @if($reported->user_actions && count($reported->user_actions) > 0)
-            <div><dt class="text-sm text-slate-500">User said</dt><dd>{{ implode(', ', $reported->user_actions) }}</dd></div>
+            <div><dt class="text-sm text-slate-500">User said</dt><dd class="text-slate-900">{{ implode(', ', $reported->user_actions) }}</dd></div>
         @endif
     </dl>
     @if($reported->snippet)
@@ -47,7 +47,7 @@
         </div>
     @endif
     @if($reported->phishingMessage)
-        <p class="mt-4 pt-4 border-t border-slate-100 text-sm">Campaign: <a href="{{ route('admin.campaigns.show', $reported->phishingMessage->campaign) }}" class="text-blue-600 hover:underline">{{ $reported->phishingMessage->campaign->name }}</a></p>
+        <p class="mt-4 pt-4 border-t border-slate-100 text-sm text-slate-800">Campaign: <a href="{{ route('admin.campaigns.show', $reported->phishingMessage->campaign) }}" class="text-blue-600 hover:underline">{{ $reported->phishingMessage->campaign->name }}</a></p>
     @endif
 </div>
 
