@@ -24,6 +24,25 @@
             }
         }
     </script>
+    <style>
+        /* Global contrast fix: many screens use white cards on a dark shell.
+           Ensure readable defaults inside white surfaces without per-page tweaks. */
+        .bg-white {
+            color: #0f172a;
+        }
+        .bg-white .text-slate-400 {
+            color: #475569 !important;
+        }
+        .bg-white .text-slate-500 {
+            color: #334155 !important;
+        }
+        .bg-white .text-slate-600 {
+            color: #1e293b !important;
+        }
+        .bg-white .text-slate-700 {
+            color: #0f172a !important;
+        }
+    </style>
     @stack('styles')
 </head>
 <body class="bg-slate-900 text-slate-100 antialiased min-h-screen">

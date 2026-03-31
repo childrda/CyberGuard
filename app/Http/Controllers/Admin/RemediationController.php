@@ -5,11 +5,16 @@ namespace App\Http\Controllers\Admin;
 use App\Http\Controllers\Controller;
 use App\Models\ReportedMessage;
 use App\Models\RemediationJob;
+use App\Services\RemediationPreflightService;
 use Illuminate\Http\Request;
 use Illuminate\View\View;
 
 class RemediationController extends Controller
 {
+    public function __construct(
+        protected RemediationPreflightService $preflight
+    ) {}
+
     public function index(Request $request): View
     {
         $jobs = RemediationJob::with('reportedMessage', 'approver')
@@ -36,6 +41,10 @@ class RemediationController extends Controller
         if ($reported->tenant->isReportOnly()) {
             return redirect()->back()->with('error', 'Tenant is in report_only mode.');
         }
+        $pre = $this->preflight->checkTenant($reported->tenant);
+        if (! $pre['ok']) {
+            return redirect()->back()->with('error', $pre['error'] ?? 'Remediation preflight failed.');
+        }
         $job = RemediationJob::create([
             'tenant_id' => $reported->tenant_id,
             'reported_message_id' => $reported->id,
@@ -52,6 +61,14 @@ class RemediationController extends Controller
     public function run(ReportedMessage $reported)
     {
         $this->authorize('updateStatus', $reported);
+        $reported->load('tenant');
+        if (! $reported->tenant) {
+            return redirect()->back()->with('error', 'Report has no tenant; remediation requires a tenant.');
+        }
+        $pre = $this->preflight->checkTenant($reported->tenant);
+        if (! $pre['ok']) {
+            return redirect()->back()->with('error', $pre['error'] ?? 'Remediation preflight failed.');
+        }
         $job = RemediationJob::where('reported_message_id', $reported->id)->latest()->first();
         if (! $job || $job->status !== RemediationJob::STATUS_APPROVED_FOR_REMOVAL) {
             return redirect()->back()->with('error', 'No approved job found.');

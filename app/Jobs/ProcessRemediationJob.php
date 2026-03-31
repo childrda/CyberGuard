@@ -6,6 +6,7 @@ use App\Models\MailboxActionLog;
 use App\Models\RemediationJob;
 use App\Models\RemediationJobItem;
 use App\Services\GmailRemovalService;
+use App\Services\RemediationPreflightService;
 use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Bus\Dispatchable;
@@ -28,6 +29,16 @@ class ProcessRemediationJob implements ShouldQueue
         $tenant = $reported->tenant;
         if (! $tenant) {
             $this->remediationJob->update(['status' => RemediationJob::STATUS_FAILED, 'failure_summary' => 'No tenant']);
+            return;
+        }
+
+        $preflight = app(RemediationPreflightService::class)->checkTenant($tenant);
+        if (! $preflight['ok']) {
+            $this->remediationJob->update([
+                'status' => RemediationJob::STATUS_FAILED,
+                'failure_summary' => $preflight['error'] ?? 'Remediation preflight failed',
+                'completed_at' => now(),
+            ]);
             return;
         }
 

@@ -5,6 +5,7 @@ namespace App\Services;
 use App\Models\ReportedMessage;
 use Google\Client as GoogleClient;
 use Google\Service\Gmail;
+use Google\Service\Gmail\ModifyMessageRequest;
 use Google\Service\Directory;
 use Illuminate\Support\Facades\Log;
 
@@ -57,10 +58,30 @@ class GmailRemovalService
             $this->client->setSubject($reported->reporter_email);
             $gmail = new Gmail($this->client);
             $gmail->users_messages->trash('me', $reported->gmail_message_id);
-            return ['ok' => true, 'message' => 'Message trashed in reporter mailbox.'];
+
+            // Verify labels after trash action. In some edge cases Gmail accepts
+            // the call but message remains in INBOX due to thread/label state.
+            $msg = $gmail->users_messages->get('me', $reported->gmail_message_id, ['format' => 'minimal']);
+            $labels = $msg->getLabelIds() ?: [];
+            if (in_array('INBOX', $labels, true)) {
+                // Fallback: force remove INBOX and add TRASH labels explicitly.
+                $mod = new ModifyMessageRequest([
+                    'removeLabelIds' => ['INBOX'],
+                    'addLabelIds' => ['TRASH'],
+                ]);
+                $gmail->users_messages->modify('me', $reported->gmail_message_id, $mod);
+                $msg = $gmail->users_messages->get('me', $reported->gmail_message_id, ['format' => 'minimal']);
+                $labels = $msg->getLabelIds() ?: [];
+            }
+
+            if (in_array('INBOX', $labels, true)) {
+                return ['ok' => false, 'error' => 'Message still has INBOX label after remediation.'];
+            }
+
+            return ['ok' => true, 'message' => 'Message removed from reporter inbox.'];
         } catch (\Throwable $e) {
-            Log::warning('GmailRemovalService removeFromUserMailbox failed');
-            return ['ok' => false, 'error' => 'Operation failed.'];
+            Log::warning('GmailRemovalService removeFromUserMailbox failed: '.$e->getMessage());
+            return ['ok' => false, 'error' => 'Operation failed: '.$e->getMessage()];
         }
     }
 
