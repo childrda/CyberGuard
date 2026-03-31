@@ -35,7 +35,6 @@ class GmailRemovalService
             $this->client->setAuthConfig($path);
             $this->client->setScopes([
                 Gmail::GMAIL_MODIFY,
-                Gmail::GMAIL_READONLY,
                 Directory::ADMIN_DIRECTORY_USER_READONLY,
             ]);
             $this->client->setSubject(null); // set per-request when impersonating
