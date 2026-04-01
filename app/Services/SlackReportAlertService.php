@@ -4,6 +4,7 @@ namespace App\Services;
 
 use App\Models\ReportedMessage;
 use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Facades\Log;
 use RuntimeException;
 
 class SlackReportAlertService
@@ -44,7 +45,12 @@ class SlackReportAlertService
             }
 
             $error = (string) ($updateResponse['error'] ?? '');
-            if (! in_array($error, ['message_not_found', 'channel_not_found'], true)) {
+            Log::warning('Slack chat.update failed; posting new message', [
+                'reported_message_id' => $reported->id,
+                'error' => $error,
+                'response_metadata' => $updateResponse['response_metadata'] ?? null,
+            ]);
+            if (! in_array($error, ['message_not_found', 'channel_not_found', 'invalid_blocks', 'cant_update_message'], true)) {
                 throw new RuntimeException('Slack chat.update failed: '.$error);
             }
         }
@@ -80,7 +86,15 @@ class SlackReportAlertService
             throw new RuntimeException("Slack {$method} HTTP failure: ".$response->status());
         }
 
-        return $response->json() ?: [];
+        $result = $response->json() ?: [];
+        if (($result['ok'] ?? false) && ! empty($result['warning'])) {
+            Log::info('Slack API warning', [
+                'method' => $method,
+                'warning' => $result['warning'],
+            ]);
+        }
+
+        return $result;
     }
 
     private function buildSummaryText(ReportedMessage $reported): string
@@ -123,7 +137,9 @@ class SlackReportAlertService
 
         $clickedText = $flags['clicked_link'] ? ':warning: *Yes*' : 'No';
         $enteredInfoText = $flags['entered_info'] ? ':warning: *Yes*' : 'No';
-        $enteredPasswordExtra = $flags['entered_password'] ? "\n_:key: Password reported too_" : '';
+        if ($flags['entered_password']) {
+            $enteredInfoText .= "\n_(password also reported)_";
+        }
 
         $mailboxText = $reported->reporter_mailbox_cleared_at
             ? ':white_check_mark: *Recalled* — '.$reported->reporter_mailbox_cleared_at->toDateTimeString().' UTC'
@@ -133,20 +149,18 @@ class SlackReportAlertService
             ? ':gear: *Google Admin* investigation tool\n_(CyberGuard did not bulk-remove)_'
             : '_Not flagged_';
 
-        // First field grid: reporter risk + remediation (same two-column style as the rest of the alert).
-        $riskAndRemediationFields = [
+        // One section, max 10 fields (Slack limit). Risk/remediation rows first so they stay visible.
+        // Sanitize From/Subject/Reporter — raw `<email>` and `&` break mrkdwn and can make chat.update reject blocks.
+        $allFields = [
             ['type' => 'mrkdwn', 'text' => "*Clicked a link*\n{$clickedText}"],
-            ['type' => 'mrkdwn', 'text' => "*Entered sensitive info*\n{$enteredInfoText}{$enteredPasswordExtra}"],
+            ['type' => 'mrkdwn', 'text' => "*Entered sensitive info*\n{$enteredInfoText}"],
             ['type' => 'mrkdwn', 'text' => "*Reporter mailbox*\n{$mailboxText}"],
             ['type' => 'mrkdwn', 'text' => "*Domain-wide removal*\n{$domainWideText}"],
-        ];
-
-        $metaFields = [
             ['type' => 'mrkdwn', 'text' => "*Status*\n{$statusEmoji} {$status}"],
             ['type' => 'mrkdwn', 'text' => "*Type*\n".strtoupper((string) ($reported->report_type ?: 'phish'))],
-            ['type' => 'mrkdwn', 'text' => "*Reporter*\n".($reported->reporter_email ?: '—')],
-            ['type' => 'mrkdwn', 'text' => "*From*\n".($reported->from_address ?: '—')],
-            ['type' => 'mrkdwn', 'text' => "*Subject*\n".($reported->subject ?: '—')],
+            ['type' => 'mrkdwn', 'text' => "*Reporter*\n".$this->slackSafeMrkdwnValue($reported->reporter_email)],
+            ['type' => 'mrkdwn', 'text' => "*From*\n".$this->slackSafeMrkdwnValue($reported->from_address)],
+            ['type' => 'mrkdwn', 'text' => "*Subject*\n".$this->slackSafeMrkdwnValue($reported->subject)],
             ['type' => 'mrkdwn', 'text' => "*Reported at*\n".$reported->created_at->toDateTimeString().' UTC'],
         ];
 
@@ -161,13 +175,7 @@ class SlackReportAlertService
             ],
         ];
 
-        $blocks[] = [
-            'type' => 'section',
-            'fields' => $riskAndRemediationFields,
-        ];
-
         if ($flags['clicked_link'] || $flags['entered_info'] || $flags['entered_password']) {
-            $blocks[] = ['type' => 'divider'];
             $blocks[] = [
                 'type' => 'section',
                 'text' => [
@@ -179,7 +187,7 @@ class SlackReportAlertService
 
         $blocks[] = [
             'type' => 'section',
-            'fields' => $metaFields,
+            'fields' => $allFields,
         ];
         $blocks[] = [
             'type' => 'actions',
@@ -335,5 +343,23 @@ class SlackReportAlertService
             'analyst_confirmed_simulation' => ':large_blue_circle:',
             default => ':information_source:',
         };
+    }
+
+    /**
+     * Neutralize characters that break Slack mrkdwn / Block Kit (e.g. Name ‹email› uses angle brackets).
+     */
+    private function slackSafeMrkdwnValue(?string $s, int $max = 900): string
+    {
+        if ($s === null || trim($s) === '') {
+            return '—';
+        }
+        $s = mb_substr($s, 0, $max);
+
+        // Fullwidth / lookalikes stop * _ ` & < > from triggering formatting or links
+        return str_replace(
+            ['\\', '&', '<', '>', '*', '_', '`'],
+            ['＼', '＆', '‹', '›', '＊', '＿', '｀'],
+            $s
+        );
     }
 }

@@ -134,4 +134,50 @@ class SlackReportAlertServiceTest extends TestCase
                 && str_contains((string) $flat, 'High priority');
         });
     }
+
+    public function test_sync_falls_back_to_post_message_when_chat_update_invalid_blocks(): void
+    {
+        $tenant = Tenant::create([
+            'name' => 'Tenant',
+            'domain' => 'cgtest.invalid',
+            'slug' => 'slack-fb-'.uniqid(),
+            'active' => true,
+            'slack_alerts_enabled' => true,
+            'slack_bot_token' => 'xoxb-test',
+            'slack_channel' => 'phishing-alert',
+        ]);
+
+        $reported = ReportedMessage::withoutGlobalScope('tenant')->create([
+            'tenant_id' => $tenant->id,
+            'reporter_email' => 'user@cgtest.invalid',
+            'subject' => 'Test',
+            'from_address' => 'A <b@c.test>',
+            'report_type' => 'phish',
+            'slack_channel' => 'COLD',
+            'slack_message_ts' => '111.222',
+        ]);
+
+        Http::fake(function (\Illuminate\Http\Client\Request $request) {
+            if (str_contains($request->url(), 'chat.update')) {
+                return Http::response(['ok' => false, 'error' => 'invalid_blocks']);
+            }
+            if (str_contains($request->url(), 'chat.postMessage')) {
+                return Http::response([
+                    'ok' => true,
+                    'channel' => 'CNEW',
+                    'ts' => '1712600000.00001',
+                ]);
+            }
+
+            return Http::response(['ok' => false], 500);
+        });
+
+        app(SlackReportAlertService::class)->syncReportAlert($reported->fresh('tenant'));
+
+        $this->assertDatabaseHas('reported_messages', [
+            'id' => $reported->id,
+            'slack_channel' => 'CNEW',
+            'slack_message_ts' => '1712600000.00001',
+        ]);
+    }
 }
