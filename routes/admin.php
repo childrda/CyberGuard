@@ -34,6 +34,8 @@ Route::middleware(['auth', 'verified', 'tenant', 'no.insecure.defaults'])->prefi
         Route::get('/templates', [TemplateController::class, 'index'])->name('templates.index');
         Route::get('/templates/{template}', [TemplateController::class, 'show'])->name('templates.show');
         Route::get('/attacks', [AttackController::class, 'index'])->name('attacks.index');
+        // Must be before /attacks/{attack} or "create" is captured as an attack id (404).
+        Route::get('/attacks/create', [AttackController::class, 'create'])->name('attacks.create')->middleware('role:superadmin,campaign_admin');
         Route::get('/attacks/{attack}', [AttackController::class, 'show'])->name('attacks.show');
         Route::get('/attacks/{attack}/preview', [AttackController::class, 'preview'])->name('attacks.preview');
         Route::get('/attacks/{attack}/validate', [AttackController::class, 'validateContent'])->name('attacks.validate');
@@ -70,7 +72,7 @@ Route::middleware(['auth', 'verified', 'tenant', 'no.insecure.defaults'])->prefi
     Route::middleware('role:superadmin,campaign_admin')->group(function () {
         Route::resource('campaigns', CampaignController::class)->except(['index', 'show', 'create', 'edit']);
         Route::resource('templates', TemplateController::class)->except(['index', 'show']);
-        Route::resource('attacks', AttackController::class)->except(['index', 'show']);
+        Route::resource('attacks', AttackController::class)->except(['index', 'show', 'create']);
         Route::post('/attacks/{attack}/send-test', [AttackController::class, 'sendTest'])->name('attacks.send-test');
         Route::get('/attack-assets', [AttackAssetController::class, 'index'])->name('attack-assets.index');
         Route::post('/attack-assets', [AttackAssetController::class, 'store'])->name('attack-assets.store');
