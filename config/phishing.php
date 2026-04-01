@@ -34,6 +34,11 @@ return [
     |--------------------------------------------------------------------------
     | Queue name for external integrations (Slack report alerts)
     |--------------------------------------------------------------------------
+    | MUST match a queue your workers process. Example:
+    |   queue:work database --queue=notifications,remediation,phishing-send
+    | → use "notifications" (default below) or set PHISHING_SLACK_QUEUE to one
+    |   of the queues in that list. If you only run queue:work with no --queue,
+    |   use PHISHING_SLACK_QUEUE=default.
     */
     'slack_queue' => env('PHISHING_SLACK_QUEUE', 'notifications'),
 

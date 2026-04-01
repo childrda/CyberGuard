@@ -41,6 +41,12 @@ class SlackReportAlertService
             ]));
 
             if ($updateResponse['ok'] ?? false) {
+                Log::info('Slack chat.update succeeded', [
+                    'reported_message_id' => $reported->id,
+                    'slack_channel' => $reported->slack_channel,
+                    'slack_message_ts' => $reported->slack_message_ts,
+                ]);
+
                 return;
             }
 
@@ -66,6 +72,11 @@ class SlackReportAlertService
 
         $channel = (string) ($postResponse['channel'] ?? '');
         $ts = (string) ($postResponse['ts'] ?? '');
+        Log::info('Slack chat.postMessage succeeded', [
+            'reported_message_id' => $reported->id,
+            'slack_channel' => $channel,
+            'slack_message_ts' => $ts,
+        ]);
         if ($channel !== '' && $ts !== '') {
             $reported->forceFill([
                 'slack_channel' => $channel,

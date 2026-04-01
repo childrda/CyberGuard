@@ -88,6 +88,7 @@
                     class="mt-1 w-full rounded border border-slate-600 bg-slate-800 px-3 py-2 text-slate-100 placeholder-slate-500"
                     placeholder="phishing-alert">
                 <p class="mt-1 text-xs text-slate-500">Channel name (without #) or channel ID.</p>
+                <p class="mt-2 text-xs text-amber-200/90">Slack jobs go to the <code class="rounded bg-slate-900 px-1">{{ config('phishing.slack_queue') }}</code> queue (<code class="rounded bg-slate-900 px-1">PHISHING_SLACK_QUEUE</code> in <code class="rounded bg-slate-900 px-1">.env</code>). Your <code class="rounded bg-slate-900 px-1">queue:work --queue=...</code> list must include that name (e.g. <code class="rounded bg-slate-900 px-1">notifications</code>).</p>
                 @error('slack_channel')<p class="mt-1 text-sm text-red-400">{{ $message }}</p>@enderror
             </div>
             <div>

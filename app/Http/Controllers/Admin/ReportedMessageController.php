@@ -8,6 +8,7 @@ use App\Models\PhishingReport;
 use App\Models\ReportedMessage;
 use App\Services\AuditService;
 use App\Services\GmailRemovalService;
+use App\Services\SlackReportAlertService;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\Response;
@@ -72,7 +73,40 @@ class ReportedMessageController extends Controller
             && is_file($credsPath)
             && is_readable($credsPath);
 
-        return view('admin.reports.show', compact('reported', 'gmailRemovalEnabled', 'canPreviewFullMessage'));
+        $tenant = $reported->tenant;
+        $canPushSlack = $tenant
+            && $tenant->slack_alerts_enabled
+            && trim((string) $tenant->slack_bot_token) !== '';
+
+        return view('admin.reports.show', compact(
+            'reported',
+            'gmailRemovalEnabled',
+            'canPreviewFullMessage',
+            'canPushSlack'
+        ));
+    }
+
+    public function syncSlackNow(ReportedMessage $reported, SlackReportAlertService $slack): RedirectResponse
+    {
+        $this->authorize('updateStatus', $reported);
+        $reported->load('tenant');
+        $tenant = $reported->tenant;
+        if (! $tenant || ! $tenant->slack_alerts_enabled || trim((string) $tenant->slack_bot_token) === '') {
+            return redirect()->back()->with('error', 'Slack alerts are not enabled or the bot token is missing for this tenant.');
+        }
+
+        try {
+            $slack->syncReportAlert($reported->fresh(['tenant', 'analyst']));
+        } catch (\Throwable $e) {
+            return redirect()->back()->with('error', 'Slack sync failed: '.$e->getMessage());
+        }
+
+        $queue = config('phishing.slack_queue');
+
+        return redirect()->back()->with(
+            'success',
+            'Slack alert sent. If automatic updates still fail, ensure a queue worker is running and processing the "'.$queue.'" queue (see .env PHISHING_SLACK_QUEUE).'
+        );
     }
 
     public function confirmReal(Request $request, ReportedMessage $reported): RedirectResponse

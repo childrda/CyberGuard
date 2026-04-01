@@ -63,6 +63,7 @@ Route::middleware(['auth', 'verified', 'tenant', 'no.insecure.defaults'])->prefi
         Route::post('/reports/{reported}/confirm-false-positive', [ReportedMessageController::class, 'confirmFalsePositive'])->name('reports.confirm-false-positive');
         Route::post('/reports/{reported}/remove-reporter', [ReportedMessageController::class, 'removeFromReporterMailbox'])->name('reports.remove-reporter');
         Route::post('/reports/{reported}/remove-all', [ReportedMessageController::class, 'removeFromAllMailboxes'])->name('reports.remove-all');
+        Route::post('/reports/{reported}/sync-slack', [ReportedMessageController::class, 'syncSlackNow'])->name('reports.sync-slack');
     });
 
     Route::middleware('role:superadmin,campaign_admin,analyst')->group(function () {
