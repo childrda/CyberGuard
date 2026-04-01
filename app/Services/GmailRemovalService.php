@@ -4,9 +4,10 @@ namespace App\Services;
 
 use App\Models\ReportedMessage;
 use Google\Client as GoogleClient;
-use Google\Service\Gmail;
-use Google\Service\Gmail\ModifyMessageRequest;
 use Google\Service\Directory;
+use Google\Service\Gmail;
+use Google\Service\Gmail\MessagePart;
+use Google\Service\Gmail\ModifyMessageRequest;
 use Illuminate\Support\Facades\Log;
 
 /**
@@ -16,18 +17,21 @@ use Illuminate\Support\Facades\Log;
 class GmailRemovalService
 {
     protected ?GoogleClient $client = null;
+
     protected ?string $lastError = null;
 
     public function __construct()
     {
         if (! config('phishing.gmail_removal_enabled') || ! config('phishing.google_credentials_path')) {
             $this->lastError = 'Gmail removal disabled or credentials path missing in config.';
+
             return;
         }
         $path = config('phishing.google_credentials_path');
         if (! is_file($path)) {
             $this->lastError = 'Credentials file not found or not readable: '.$path;
             Log::warning('GmailRemovalService: '.$this->lastError);
+
             return;
         }
         try {
@@ -52,6 +56,7 @@ class GmailRemovalService
     {
         if (! $this->client) {
             $this->lastError = 'Gmail removal not configured.';
+
             return ['ok' => false, 'error' => 'Gmail removal not configured.'];
         }
         if (! $reported->gmail_message_id || ! $reported->reporter_email) {
@@ -85,8 +90,92 @@ class GmailRemovalService
             return ['ok' => true, 'message' => 'Message removed from reporter inbox.'];
         } catch (\Throwable $e) {
             Log::warning('GmailRemovalService removeFromUserMailbox failed: '.$e->getMessage());
+
             return ['ok' => false, 'error' => 'Operation failed: '.$e->getMessage()];
         }
+    }
+
+    /**
+     * Fetch full message body (HTML preferred, else plain) as the reporter would see it in Gmail.
+     *
+     * @return array{ok: bool, html?: string, plain?: string, error?: string}
+     */
+    public function fetchMessageBodyForPreview(ReportedMessage $reported): array
+    {
+        if (! $this->client) {
+            return ['ok' => false, 'error' => $this->lastError ?? 'Gmail removal not configured.'];
+        }
+        if (! $reported->gmail_message_id || ! $reported->reporter_email) {
+            return ['ok' => false, 'error' => 'Missing Gmail message id or reporter email.'];
+        }
+
+        try {
+            $this->client->setSubject($reported->reporter_email);
+            $gmail = new Gmail($this->client);
+            $msg = $gmail->users_messages->get('me', $reported->gmail_message_id, ['format' => 'full']);
+            $payload = $msg->getPayload();
+            if (! $payload) {
+                return ['ok' => false, 'error' => 'Message has no payload.'];
+            }
+            $bodies = $this->collectBodiesFromPart($payload);
+            $html = trim((string) ($bodies['html'] ?? ''));
+            $plain = trim((string) ($bodies['plain'] ?? ''));
+
+            return [
+                'ok' => true,
+                'html' => $html,
+                'plain' => $plain,
+            ];
+        } catch (\Throwable $e) {
+            Log::warning('GmailRemovalService fetchMessageBodyForPreview failed: '.$e->getMessage());
+
+            return ['ok' => false, 'error' => 'Could not load message: '.$e->getMessage()];
+        }
+    }
+
+    /**
+     * @return array{html: string, plain: string}
+     */
+    protected function collectBodiesFromPart(MessagePart $part): array
+    {
+        $html = '';
+        $plain = '';
+        $parts = $part->getParts();
+        if (is_array($parts)) {
+            foreach ($parts as $sub) {
+                if ($sub instanceof MessagePart) {
+                    $nested = $this->collectBodiesFromPart($sub);
+                    $html .= $nested['html'];
+                    $plain .= $nested['plain'];
+                }
+            }
+        }
+
+        $mime = (string) $part->getMimeType();
+        $body = $part->getBody();
+        $data = $body ? $body->getData() : null;
+        if (is_string($data) && $data !== '') {
+            $decoded = $this->decodeGmailBase64($data);
+            if ($mime === 'text/html') {
+                $html .= $decoded;
+            } elseif ($mime === 'text/plain') {
+                $plain .= $decoded;
+            }
+        }
+
+        return ['html' => $html, 'plain' => $plain];
+    }
+
+    protected function decodeGmailBase64(string $data): string
+    {
+        $data = strtr($data, '-_', '+/');
+        $pad = strlen($data) % 4;
+        if ($pad > 0) {
+            $data .= str_repeat('=', 4 - $pad);
+        }
+        $raw = base64_decode($data, true);
+
+        return $raw !== false ? $raw : '';
     }
 
     /**
@@ -96,6 +185,7 @@ class GmailRemovalService
     {
         if (! $this->client) {
             $this->lastError = 'Gmail removal not configured.';
+
             return ['ok' => false, 'error' => 'Gmail removal not configured.'];
         }
 
@@ -115,6 +205,7 @@ class GmailRemovalService
         $users = $this->listDomainUsers($domain);
         if (empty($users)) {
             $extra = $this->lastError ? ' '.$this->lastError : '';
+
             return ['ok' => false, 'error' => 'Could not list domain users. Check Admin SDK scope and delegation.'.$extra];
         }
 
@@ -151,6 +242,7 @@ class GmailRemovalService
                 return ['ok' => true, 'skipped' => true];
             }
             $gmail->users_messages->trash('me', $messages[0]->getId());
+
             return ['ok' => true];
         } catch (\Throwable $e) {
             return ['ok' => false, 'error' => $e->getMessage()];
@@ -163,6 +255,7 @@ class GmailRemovalService
             $admin = config('phishing.google_admin_user');
             if (! $admin) {
                 Log::warning('GmailRemovalService: GOOGLE_ADMIN_USER not set; cannot list domain users.');
+
                 return [];
             }
             $this->client->setSubject($admin);
@@ -180,6 +273,7 @@ class GmailRemovalService
                 }
                 $pageToken = $resp->getNextPageToken();
             } while ($pageToken);
+
             return $users;
         } catch (\Throwable $e) {
             $this->lastError = $e->getMessage();
@@ -188,6 +282,7 @@ class GmailRemovalService
                 'admin_user' => config('phishing.google_admin_user'),
                 'credentials_path' => config('phishing.google_credentials_path'),
             ]);
+
             return [];
         }
     }
@@ -207,12 +302,14 @@ class GmailRemovalService
                 return is_string($headers[$key]) ? trim($headers[$key]) : null;
             }
         }
+
         return null;
     }
 
     protected function domainFromEmail(string $email): ?string
     {
         $pos = strrpos($email, '@');
+
         return $pos !== false ? substr($email, $pos + 1) : null;
     }
 }

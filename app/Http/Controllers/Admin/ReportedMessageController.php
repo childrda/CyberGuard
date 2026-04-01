@@ -10,6 +10,7 @@ use App\Services\AuditService;
 use App\Services\GmailRemovalService;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Http\Response;
 use Illuminate\View\View;
 
 class ReportedMessageController extends Controller
@@ -60,9 +61,18 @@ class ReportedMessageController extends Controller
     public function show(ReportedMessage $reported): View
     {
         $this->authorize('view', $reported);
-        $reported->load('phishingMessage.campaign.template', 'analyst');
+        $reported->load('phishingMessage.campaign.template', 'analyst', 'tenant');
         $gmailRemovalEnabled = config('phishing.gmail_removal_enabled');
-        return view('admin.reports.show', compact('reported', 'gmailRemovalEnabled'));
+        $credsPath = $reported->tenant
+            ? trim((string) ($reported->tenant->google_credentials_path ?? ''))
+            : '';
+        $canPreviewFullMessage = $reported->gmail_message_id
+            && $reported->reporter_email
+            && $credsPath !== ''
+            && is_file($credsPath)
+            && is_readable($credsPath);
+
+        return view('admin.reports.show', compact('reported', 'gmailRemovalEnabled', 'canPreviewFullMessage'));
     }
 
     public function confirmReal(Request $request, ReportedMessage $reported): RedirectResponse
@@ -141,7 +151,10 @@ class ReportedMessageController extends Controller
         $result = $this->gmailRemoval->removeFromUserMailbox($reported);
 
         if ($result['ok']) {
+            $reported->update(['reporter_mailbox_cleared_at' => now()]);
             $this->audit->log('report_removed_reporter_mailbox', $reported);
+            SyncReportedMessageToSlackJob::dispatch($reported->id);
+
             return redirect()->route('admin.reports.show', $reported)->with('success', 'Message trashed in reporter\'s mailbox.');
         }
 
@@ -151,17 +164,60 @@ class ReportedMessageController extends Controller
     public function removeFromAllMailboxes(ReportedMessage $reported): RedirectResponse
     {
         $this->authorize('removeFromMailbox', $reported);
-        $result = $this->gmailRemoval->removeFromAllMailboxes($reported);
+        $reported->update(['remediation_via_google_admin' => true]);
+        $this->audit->log('report_domain_remediation_google_admin', $reported, null, [
+            'note' => 'Domain-wide removal marked for Google Admin investigation tool; CyberGuard did not trash mailboxes.',
+        ]);
+        SyncReportedMessageToSlackJob::dispatch($reported->id);
 
-        if ($result['ok']) {
-            $this->audit->log('report_removed_all_mailboxes', $reported, null, $result);
-            $msg = "Trashed in {$result['trashed_count']} mailbox(es).";
-            if (! empty($result['errors'])) {
-                $msg .= ' Some errors: '.implode('; ', array_slice($result['errors'], 0, 2));
-            }
-            return redirect()->route('admin.reports.show', $reported)->with('success', $msg);
+        return redirect()->route('admin.reports.show', $reported)
+            ->with('success', 'Recorded: domain-wide remediation will be completed in Google Admin (investigation tool). No messages were removed by CyberGuard.');
+    }
+
+    /**
+     * Raw HTML/plain body as fetched from the reporter's Gmail (for iframe preview).
+     */
+    public function messageBody(ReportedMessage $reported): Response
+    {
+        $this->authorize('view', $reported);
+        $reported->load('tenant');
+        if (! $reported->gmail_message_id || ! $reported->reporter_email) {
+            abort(404, 'No Gmail message reference for this report.');
+        }
+        $tenant = $reported->tenant;
+        if (! $tenant) {
+            abort(404, 'Report has no tenant.');
+        }
+        $path = trim((string) ($tenant->google_credentials_path ?? ''));
+        if ($path === '' || ! is_file($path) || ! is_readable($path)) {
+            abort(503, 'Tenant Google credentials are not configured or not readable.');
         }
 
-        return redirect()->route('admin.reports.show', $reported)->with('error', $result['error'] ?? 'Removal failed.');
+        config([
+            'phishing.google_credentials_path' => $path,
+            'phishing.google_admin_user' => $tenant->google_admin_user,
+            'phishing.google_domain' => $tenant->domain,
+            'phishing.gmail_removal_enabled' => true,
+        ]);
+
+        $removal = new GmailRemovalService;
+        $result = $removal->fetchMessageBodyForPreview($reported);
+        if (! $result['ok']) {
+            abort(502, $result['error'] ?? 'Could not load message from Gmail.');
+        }
+
+        $html = $result['html'] ?? '';
+        $plain = $result['plain'] ?? '';
+        $body = $html !== ''
+            ? $html
+            : '<pre style="white-space:pre-wrap;font-family:system-ui,sans-serif;padding:1rem">'.e($plain ?: '(empty body)').'</pre>';
+
+        $csp = "default-src 'none'; base-uri 'none'; form-action 'none'; frame-ancestors 'self'; "
+            ."img-src https: http: data: cid: blob:; style-src 'unsafe-inline'; font-src data: https:";
+
+        return response($body, 200)
+            ->header('Content-Type', 'text/html; charset=UTF-8')
+            ->header('Content-Security-Policy', $csp)
+            ->header('X-Frame-Options', 'SAMEORIGIN');
     }
 }

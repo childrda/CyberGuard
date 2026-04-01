@@ -6,9 +6,9 @@ use App\Http\Controllers\Admin\AuditLogController;
 use App\Http\Controllers\Admin\CampaignController;
 use App\Http\Controllers\Admin\DashboardController;
 use App\Http\Controllers\Admin\LeaderboardController;
-use App\Http\Controllers\Admin\ScorePeriodController;
 use App\Http\Controllers\Admin\RemediationController;
 use App\Http\Controllers\Admin\ReportedMessageController;
+use App\Http\Controllers\Admin\ScorePeriodController;
 use App\Http\Controllers\Admin\SettingsController;
 use App\Http\Controllers\Admin\SystemLogController;
 use App\Http\Controllers\Admin\TemplateController;
@@ -24,6 +24,7 @@ Route::middleware(['auth', 'verified', 'tenant', 'no.insecure.defaults'])->prefi
 
     Route::middleware('role:superadmin,campaign_admin,analyst,viewer')->group(function () {
         Route::get('/reports', [ReportedMessageController::class, 'index'])->name('reports.index');
+        Route::get('/reports/{reported}/message-body', [ReportedMessageController::class, 'messageBody'])->name('reports.message-body');
         Route::get('/reports/{reported}', [ReportedMessageController::class, 'show'])->name('reports.show');
         Route::get('/remediation', [RemediationController::class, 'index'])->name('remediation.index');
         Route::get('/remediation/{job}', [RemediationController::class, 'show'])->name('remediation.show');

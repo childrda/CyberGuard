@@ -29,6 +29,7 @@ class ProcessRemediationJob implements ShouldQueue
         $tenant = $reported->tenant;
         if (! $tenant) {
             $this->remediationJob->update(['status' => RemediationJob::STATUS_FAILED, 'failure_summary' => 'No tenant']);
+
             return;
         }
 
@@ -39,6 +40,7 @@ class ProcessRemediationJob implements ShouldQueue
                 'failure_summary' => $preflight['error'] ?? 'Remediation preflight failed',
                 'completed_at' => now(),
             ]);
+
             return;
         }
 
@@ -55,6 +57,7 @@ class ProcessRemediationJob implements ShouldQueue
                 'failure_summary' => 'No Message-ID header available; cannot perform domain-wide remediation.',
                 'completed_at' => now(),
             ]);
+
             return;
         }
 
@@ -70,6 +73,7 @@ class ProcessRemediationJob implements ShouldQueue
                 'failure_summary' => 'Reporter email is missing; cannot run mailbox remediation.',
                 'completed_at' => now(),
             ]);
+
             return;
         }
         $dryRun = $this->remediationJob->dry_run;
@@ -102,6 +106,7 @@ class ProcessRemediationJob implements ShouldQueue
                 ]);
                 $item->update(['status' => 'logged', 'processed_at' => now()]);
                 $dryRunCount++;
+
                 continue;
             }
             $result = $removal->trashMessageByRfc822MessageId($email, $messageIdHeader ?? '');
@@ -164,6 +169,11 @@ class ProcessRemediationJob implements ShouldQueue
             'dry_run_count' => $dryRunCount,
             'failed_count' => $failedCount,
         ]);
+
+        if (! $dryRun && $removedCount > 0 && $reported->reporter_email) {
+            $reported->update(['reporter_mailbox_cleared_at' => now()]);
+            SyncReportedMessageToSlackJob::dispatch($reported->id);
+        }
     }
 
     private function resolveFinalStatus(bool $dryRun, int $removedCount, int $skippedCount, int $dryRunCount, int $failedCount): string
@@ -177,6 +187,7 @@ class ProcessRemediationJob implements ShouldQueue
         if ($failedCount > 0) {
             return $removedCount > 0 ? RemediationJob::STATUS_PARTIALLY_FAILED : RemediationJob::STATUS_FAILED;
         }
+
         return RemediationJob::STATUS_REMOVED;
     }
 
@@ -190,6 +201,7 @@ class ProcessRemediationJob implements ShouldQueue
                 return is_string($headers[$key]) ? trim($headers[$key]) : null;
             }
         }
+
         return null;
     }
 }

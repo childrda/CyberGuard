@@ -25,6 +25,12 @@
         @else
             <span class="inline-flex items-center rounded-md bg-slate-100 px-2.5 py-0.5 text-sm font-medium text-slate-600">Pending review</span>
         @endif
+        @if(!empty($reported->remediation_via_google_admin))
+            <span class="inline-flex items-center rounded-md bg-indigo-100 px-2.5 py-0.5 text-sm font-medium text-indigo-900" title="Domain-wide cleanup is intended via Google Admin">Google Admin remediation</span>
+        @endif
+        @if($reported->reporter_mailbox_cleared_at)
+            <span class="inline-flex items-center rounded-md bg-emerald-100 px-2.5 py-0.5 text-sm font-medium text-emerald-900" title="{{ $reported->reporter_mailbox_cleared_at->toDateTimeString() }}">Reporter copy recalled</span>
+        @endif
     </div>
 </div>
 
@@ -37,13 +43,41 @@
         <div><dt class="text-sm text-slate-500">To</dt><dd class="text-slate-700">{{ $reported->to_addresses ?? '—' }}</dd></div>
         <div><dt class="text-sm text-slate-500">Reported</dt><dd class="text-slate-900">{{ $reported->created_at->toDateTimeString() }}</dd></div>
         @if($reported->user_actions && count($reported->user_actions) > 0)
-            <div><dt class="text-sm text-slate-500">User said</dt><dd class="text-slate-900">{{ implode(', ', $reported->user_actions) }}</dd></div>
+            @php
+                $actionLabels = [
+                    'clicked_link' => 'Clicked a link',
+                    'entered_info' => 'Entered sensitive information',
+                    'entered_password' => 'Entered a password',
+                ];
+                $highRisk = ['clicked_link', 'entered_info', 'entered_password'];
+            @endphp
+            <div>
+                <dt class="text-sm text-slate-500">User said</dt>
+                <dd class="mt-1 flex flex-wrap gap-1.5">
+                    @foreach($reported->user_actions as $a)
+                        @if(in_array($a, $highRisk, true))
+                            <span class="rounded-md bg-red-100 px-2 py-0.5 text-sm font-semibold text-red-900">{{ $actionLabels[$a] ?? $a }}</span>
+                        @else
+                            <span class="rounded-md bg-slate-100 px-2 py-0.5 text-sm text-slate-800">{{ $actionLabels[$a] ?? $a }}</span>
+                        @endif
+                    @endforeach
+                </dd>
+            </div>
         @endif
     </dl>
     @if($reported->snippet)
         <div class="mt-4 pt-4 border-t border-slate-100">
-            <dt class="text-sm text-slate-500">Snippet</dt>
+            <div class="flex flex-wrap items-start justify-between gap-2">
+                <dt class="text-sm text-slate-500">Snippet</dt>
+                @if(!empty($canPreviewFullMessage))
+                    <a href="{{ route('admin.reports.message-body', $reported) }}" target="_blank" rel="noopener noreferrer" class="shrink-0 rounded-md border border-slate-300 bg-white px-2.5 py-1 text-xs font-medium text-slate-700 hover:bg-slate-50">View full message</a>
+                @endif
+            </div>
             <p class="mt-1 text-slate-700 text-sm">{{ Str::limit($reported->snippet, 300) }}</p>
+        </div>
+    @elseif(!empty($canPreviewFullMessage))
+        <div class="mt-4 pt-4 border-t border-slate-100 flex justify-end">
+            <a href="{{ route('admin.reports.message-body', $reported) }}" target="_blank" rel="noopener noreferrer" class="rounded-md border border-slate-300 bg-white px-2.5 py-1 text-xs font-medium text-slate-700 hover:bg-slate-50">View full message</a>
         </div>
     @endif
     @if($reported->phishingMessage)
@@ -84,13 +118,13 @@
     @if($reported->analyst_status === 'analyst_confirmed_real' && $gmailRemovalEnabled)
         <div class="mt-6 pt-6 border-t border-slate-200">
             <h3 class="text-sm font-medium text-slate-700 mb-2">Remove from mailboxes</h3>
-            <p class="text-sm text-slate-600 mb-3">Trash this message in Gmail so users no longer see it.</p>
+            <p class="text-sm text-slate-600 mb-3">Trash this message in the reporter&apos;s Gmail, or record that domain-wide cleanup will be done in Google Admin (CyberGuard will not bulk-remove mail).</p>
             <div class="flex flex-wrap gap-3">
                 <form method="post" action="{{ route('admin.reports.remove-reporter', $reported) }}" class="inline" onsubmit="return confirm('Trash this message in the reporter\'s mailbox?');">
                     @csrf
                     <button type="submit" class="rounded-md bg-slate-700 px-4 py-2 text-sm font-medium text-white hover:bg-slate-800">Remove from reporter</button>
                 </form>
-                <form method="post" action="{{ route('admin.reports.remove-all', $reported) }}" class="inline" onsubmit="return confirm('Search all domain mailboxes and trash this message everywhere? This may take a moment.');">
+                <form method="post" action="{{ route('admin.reports.remove-all', $reported) }}" class="inline" onsubmit="return confirm('This will NOT remove mail from CyberGuard. It records that domain-wide remediation will be completed in Google Admin (investigation tool), updates Slack, and sets status. Continue?');">
                     @csrf
                     <button type="submit" class="rounded-md bg-slate-800 px-4 py-2 text-sm font-medium text-white hover:bg-slate-900">Remove from all mailboxes</button>
                 </form>
@@ -104,25 +138,28 @@
         <div class="mt-6 pt-6 border-t border-slate-200">
             <h3 class="text-sm font-medium text-slate-700 mb-2">Remediation job (reporter mailbox)</h3>
             @php
-                $approvedJob = $reported->remediationJobs()->where('status', \App\Models\RemediationJob::STATUS_APPROVED_FOR_REMOVAL)->latest()->first();
                 $latestJob = $reported->remediationJobs()->latest()->first();
+                $terminalStatuses = [
+                    \App\Models\RemediationJob::STATUS_REMOVED,
+                    \App\Models\RemediationJob::STATUS_FAILED,
+                    \App\Models\RemediationJob::STATUS_PARTIALLY_FAILED,
+                    \App\Models\RemediationJob::STATUS_DRY_RUN_COMPLETED,
+                ];
+                $canStartRemediation = ! $latestJob || in_array($latestJob->status, $terminalStatuses, true);
             @endphp
-            @if($latestJob && $latestJob->status !== \App\Models\RemediationJob::STATUS_APPROVED_FOR_REMOVAL)
+            @if($latestJob)
                 <p class="text-sm text-slate-600 mb-2">Latest: <a href="{{ route('admin.remediation.show', $latestJob) }}" class="text-blue-600 hover:underline">Job #{{ $latestJob->id }}</a> — {{ $latestJob->statusLabel() }}</p>
             @endif
-            @if(! $approvedJob)
+            @if($latestJob && $latestJob->status === \App\Models\RemediationJob::STATUS_REMOVAL_IN_PROGRESS)
+                <p class="text-sm text-amber-800">Remediation is running. Refresh this page or open the job for updates.</p>
+            @elseif($canStartRemediation)
                 <form method="post" action="{{ route('admin.remediation.approve', $reported) }}" class="space-y-2">
                     @csrf
                     <label class="inline-flex items-center"><input type="checkbox" name="dry_run" value="1" class="rounded border-slate-300"> Dry run (reporter mailbox only; log only, do not trash)</label>
                     <div><textarea name="approval_notes" rows="2" class="w-full rounded border-slate-300 text-sm" placeholder="Approval notes (optional)"></textarea></div>
-                    <button type="submit" class="rounded-md bg-slate-700 px-4 py-2 text-sm font-medium text-white">Approve reporter removal</button>
+                    <button type="submit" class="rounded-md bg-slate-700 px-4 py-2 text-sm font-medium text-white">Approve &amp; run reporter remediation</button>
                 </form>
-            @else
-                <p class="text-sm text-slate-600 mb-2">Job approved. <a href="{{ route('admin.remediation.show', $approvedJob) }}" class="text-blue-600 hover:underline">View job #{{ $approvedJob->id }}</a></p>
-                <form method="post" action="{{ route('admin.remediation.run', $reported) }}" onsubmit="return confirm('Queue remediation to remove this message from the reporter mailbox?');">
-                    @csrf
-                    <button type="submit" class="rounded-md bg-slate-800 px-4 py-2 text-sm font-medium text-white">Run reporter remediation</button>
-                </form>
+                <p class="text-xs text-slate-500 mt-2">Approval immediately queues removal from the reporter&apos;s mailbox (no separate run step).</p>
             @endif
         </div>
     @endif

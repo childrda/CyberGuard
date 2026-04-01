@@ -35,6 +35,8 @@ class ReportedMessage extends Model
         'user_actions',
         'slack_channel',
         'slack_message_ts',
+        'remediation_via_google_admin',
+        'reporter_mailbox_cleared_at',
     ];
 
     protected function casts(): array
@@ -44,6 +46,8 @@ class ReportedMessage extends Model
             'user_actions' => 'array',
             'message_date' => 'datetime',
             'analyst_reviewed_at' => 'datetime',
+            'remediation_via_google_admin' => 'boolean',
+            'reporter_mailbox_cleared_at' => 'datetime',
         ];
     }
 

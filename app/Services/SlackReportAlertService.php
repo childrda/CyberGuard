@@ -118,18 +118,30 @@ class SlackReportAlertService
                     'emoji' => true,
                 ],
             ],
-            [
+        ];
+
+        $riskLines = $this->highRiskUserActionLines($reported);
+        if ($riskLines !== []) {
+            $blocks[] = [
                 'type' => 'section',
-                'fields' => $fields,
-            ],
-            [
-                'type' => 'actions',
-                'elements' => [
-                    [
-                        'type' => 'button',
-                        'text' => ['type' => 'plain_text', 'text' => 'Open in CyberGuard', 'emoji' => true],
-                        'url' => $adminUrl,
-                    ],
+                'text' => [
+                    'type' => 'mrkdwn',
+                    'text' => "*:rotating_light: Reporter risk (read this first)*\n".implode("\n", $riskLines),
+                ],
+            ];
+        }
+
+        $blocks[] = [
+            'type' => 'section',
+            'fields' => $fields,
+        ];
+        $blocks[] = [
+            'type' => 'actions',
+            'elements' => [
+                [
+                    'type' => 'button',
+                    'text' => ['type' => 'plain_text', 'text' => 'Open in CyberGuard', 'emoji' => true],
+                    'url' => $adminUrl,
                 ],
             ],
         ];
@@ -147,9 +159,32 @@ class SlackReportAlertService
         return $blocks;
     }
 
+    /**
+     * @return list<string>
+     */
+    private function highRiskUserActionLines(ReportedMessage $reported): array
+    {
+        $actions = $reported->user_actions ?? [];
+        if (! is_array($actions)) {
+            return [];
+        }
+        $lines = [];
+        if (in_array('clicked_link', $actions, true)) {
+            $lines[] = '• *The reporter said they clicked a link.*';
+        }
+        if (in_array('entered_info', $actions, true)) {
+            $lines[] = '• *The reporter said they entered sensitive information.*';
+        }
+        if (in_array('entered_password', $actions, true)) {
+            $lines[] = '• *The reporter said they entered a password.*';
+        }
+
+        return $lines;
+    }
+
     private function statusLabel(ReportedMessage $reported): string
     {
-        return match ($reported->analyst_status) {
+        $base = match ($reported->analyst_status) {
             null, '', 'pending' => 'Under review',
             'analyst_confirmed_real' => 'Confirmed phishing',
             'analyst_confirmed_spam' => 'Confirmed spam',
@@ -157,6 +192,20 @@ class SlackReportAlertService
             'analyst_confirmed_simulation' => 'Confirmed simulation',
             default => ucwords(str_replace('_', ' ', (string) $reported->analyst_status)),
         };
+
+        $suffix = [];
+        if ($reported->remediation_via_google_admin) {
+            $suffix[] = 'Remediation will take place in Google Admin (investigation tool)';
+        }
+        if ($reported->reporter_mailbox_cleared_at) {
+            $suffix[] = 'Reporter copy recalled from mailbox';
+        }
+
+        if ($suffix === []) {
+            return $base;
+        }
+
+        return $base.' — '.implode(' — ', $suffix);
     }
 
     private function statusEmoji(ReportedMessage $reported): string
@@ -171,4 +220,3 @@ class SlackReportAlertService
         };
     }
 }
-

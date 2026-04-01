@@ -9,12 +9,15 @@ use App\Models\Tenant;
 use App\Models\User;
 use App\Services\GmailRemovalService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
-use Tests\TestCase;
+use Illuminate\Support\Facades\Queue;
 use Tests\Support\FakeGmailRemovalService;
+use Tests\TestCase;
 
 class RemediationTest extends TestCase
 {
     use RefreshDatabase;
+
+    private static ?string $sharedGoogleCredsPath = null;
 
     protected function setUp(): void
     {
@@ -22,12 +25,22 @@ class RemediationTest extends TestCase
         $this->seed(\Database\Seeders\RoleSeeder::class);
     }
 
+    private function googleCredsPath(): string
+    {
+        if (self::$sharedGoogleCredsPath === null) {
+            self::$sharedGoogleCredsPath = tempnam(sys_get_temp_dir(), 'cg-gc').'.json';
+            file_put_contents(self::$sharedGoogleCredsPath, '{}');
+        }
+
+        return self::$sharedGoogleCredsPath;
+    }
+
     public function test_report_only_tenant_cannot_approve_remediation(): void
     {
         $tenant = Tenant::create([
             'name' => 'T',
-            'domain' => 'example.com',
-            'slug' => 't',
+            'domain' => 'cgtest.invalid',
+            'slug' => 't-ro-'.uniqid(),
             'active' => true,
             'remediation_policy' => 'report_only',
         ]);
@@ -35,7 +48,7 @@ class RemediationTest extends TestCase
         $analyst->roles()->attach(\App\Models\Role::where('name', 'analyst')->first()->id);
         $reported = ReportedMessage::withoutGlobalScope('tenant')->create([
             'tenant_id' => $tenant->id,
-            'reporter_email' => 'u@example.com',
+            'reporter_email' => 'u@cgtest.invalid',
             'subject' => 'Test',
             'analyst_status' => 'analyst_confirmed_real',
         ]);
@@ -51,42 +64,56 @@ class RemediationTest extends TestCase
     {
         $tenant = Tenant::create([
             'name' => 'T',
-            'domain' => 'example.com',
-            'slug' => 't',
+            'domain' => 'cgtest.invalid',
+            'slug' => 't-ap-'.uniqid(),
             'active' => true,
             'remediation_policy' => 'analyst_approval_required',
+            'google_credentials_path' => $this->googleCredsPath(),
+            'google_admin_user' => 'admin@cgtest.invalid',
         ]);
         $analyst = User::factory()->create(['tenant_id' => $tenant->id]);
         $analyst->roles()->attach(\App\Models\Role::where('name', 'analyst')->first()->id);
         $reported = ReportedMessage::withoutGlobalScope('tenant')->create([
             'tenant_id' => $tenant->id,
-            'reporter_email' => 'u@example.com',
+            'reporter_email' => 'u@cgtest.invalid',
             'subject' => 'Test',
             'analyst_status' => 'analyst_confirmed_real',
         ]);
         $this->actingAs($analyst);
         app()->instance('current_tenant_id', $tenant->id);
+        config(['phishing.gmail_removal_enabled' => true]);
+        Queue::fake();
+
         $response = $this->post(route('admin.remediation.approve', $reported), ['dry_run' => '1']);
         $response->assertRedirect();
         $this->assertDatabaseHas('remediation_jobs', [
             'reported_message_id' => $reported->id,
             'dry_run' => true,
-            'status' => RemediationJob::STATUS_APPROVED_FOR_REMOVAL,
+            'status' => RemediationJob::STATUS_REMOVAL_IN_PROGRESS,
         ]);
+        Queue::assertPushed(ProcessRemediationJob::class, 1);
     }
 
     public function test_remediation_run_requires_approved_job(): void
     {
-        $tenant = Tenant::create(['name' => 'T', 'domain' => 'example.com', 'slug' => 't', 'active' => true]);
+        $tenant = Tenant::create([
+            'name' => 'T',
+            'domain' => 'cgtest.invalid',
+            'slug' => 't-run-'.uniqid(),
+            'active' => true,
+            'google_credentials_path' => $this->googleCredsPath(),
+            'google_admin_user' => 'admin@cgtest.invalid',
+        ]);
         $analyst = User::factory()->create(['tenant_id' => $tenant->id]);
         $analyst->roles()->attach(\App\Models\Role::where('name', 'analyst')->first()->id);
         $reported = ReportedMessage::withoutGlobalScope('tenant')->create([
             'tenant_id' => $tenant->id,
-            'reporter_email' => 'u@example.com',
+            'reporter_email' => 'u@cgtest.invalid',
             'subject' => 'Test',
         ]);
         $this->actingAs($analyst);
         app()->instance('current_tenant_id', $tenant->id);
+        config(['phishing.gmail_removal_enabled' => true]);
         $response = $this->post(route('admin.remediation.run', $reported));
         $response->assertRedirect();
         $response->assertSessionHas('error');
@@ -94,13 +121,21 @@ class RemediationTest extends TestCase
 
     public function test_pure_dry_run_job_ends_as_dry_run_completed_and_does_not_increment_removed(): void
     {
-        $tenant = Tenant::create(['name' => 'T', 'domain' => 'example.com', 'slug' => 't', 'active' => true]);
+        config(['phishing.gmail_removal_enabled' => true]);
+        $tenant = Tenant::create([
+            'name' => 'T',
+            'domain' => 'cgtest.invalid',
+            'slug' => 't-dr-'.uniqid(),
+            'active' => true,
+            'google_credentials_path' => $this->googleCredsPath(),
+            'google_admin_user' => 'admin@cgtest.invalid',
+        ]);
         $approver = User::factory()->create(['tenant_id' => $tenant->id]);
         $reported = ReportedMessage::withoutGlobalScope('tenant')->create([
             'tenant_id' => $tenant->id,
-            'reporter_email' => 'u@example.com',
+            'reporter_email' => 'reporter@cgtest.invalid',
             'subject' => 'Test',
-            'message_id_header' => '<msg-123@example.com>',
+            'message_id_header' => '<msg-123@cgtest.invalid>',
         ]);
         $job = RemediationJob::create([
             'tenant_id' => $tenant->id,
@@ -112,7 +147,7 @@ class RemediationTest extends TestCase
         ]);
 
         $this->app->instance(GmailRemovalService::class, new FakeGmailRemovalService(
-            ['a@example.com', 'b@example.com'],
+            [],
             []
         ));
 
@@ -121,19 +156,27 @@ class RemediationTest extends TestCase
         $job->refresh();
         $this->assertSame(RemediationJob::STATUS_DRY_RUN_COMPLETED, $job->status);
         $this->assertSame(0, $job->removed_count);
-        $this->assertSame(2, $job->dry_run_count);
+        $this->assertSame(1, $job->dry_run_count);
         $this->assertSame(0, $job->failed_count);
     }
 
     public function test_real_successful_remediation_ends_as_removed(): void
     {
-        $tenant = Tenant::create(['name' => 'T', 'domain' => 'example.com', 'slug' => 't', 'active' => true]);
+        config(['phishing.gmail_removal_enabled' => true]);
+        $tenant = Tenant::create([
+            'name' => 'T',
+            'domain' => 'cgtest.invalid',
+            'slug' => 't-ok-'.uniqid(),
+            'active' => true,
+            'google_credentials_path' => $this->googleCredsPath(),
+            'google_admin_user' => 'admin@cgtest.invalid',
+        ]);
         $approver = User::factory()->create(['tenant_id' => $tenant->id]);
         $reported = ReportedMessage::withoutGlobalScope('tenant')->create([
             'tenant_id' => $tenant->id,
-            'reporter_email' => 'u@example.com',
+            'reporter_email' => 'reporter@cgtest.invalid',
             'subject' => 'Test',
-            'message_id_header' => '<msg-456@example.com>',
+            'message_id_header' => '<msg-456@cgtest.invalid>',
         ]);
         $job = RemediationJob::create([
             'tenant_id' => $tenant->id,
@@ -145,28 +188,36 @@ class RemediationTest extends TestCase
         ]);
 
         $this->app->instance(GmailRemovalService::class, new FakeGmailRemovalService(
-            ['u1@example.com', 'u2@example.com'],
-            ['u1@example.com' => ['ok' => true], 'u2@example.com' => ['ok' => true]]
+            [],
+            ['reporter@cgtest.invalid' => ['ok' => true]]
         ));
 
         (new ProcessRemediationJob($job))->handle();
 
         $job->refresh();
         $this->assertSame(RemediationJob::STATUS_REMOVED, $job->status);
-        $this->assertSame(2, $job->removed_count);
+        $this->assertSame(1, $job->removed_count);
         $this->assertSame(0, $job->dry_run_count);
         $this->assertSame(0, $job->failed_count);
     }
 
-    public function test_mixed_real_and_failed_actions_result_in_partially_failed(): void
+    public function test_skipped_reporter_mailbox_ends_as_failed(): void
     {
-        $tenant = Tenant::create(['name' => 'T', 'domain' => 'example.com', 'slug' => 't', 'active' => true]);
+        config(['phishing.gmail_removal_enabled' => true]);
+        $tenant = Tenant::create([
+            'name' => 'T',
+            'domain' => 'cgtest.invalid',
+            'slug' => 't-sk-'.uniqid(),
+            'active' => true,
+            'google_credentials_path' => $this->googleCredsPath(),
+            'google_admin_user' => 'admin@cgtest.invalid',
+        ]);
         $approver = User::factory()->create(['tenant_id' => $tenant->id]);
         $reported = ReportedMessage::withoutGlobalScope('tenant')->create([
             'tenant_id' => $tenant->id,
-            'reporter_email' => 'u@example.com',
+            'reporter_email' => 'reporter@cgtest.invalid',
             'subject' => 'Test',
-            'message_id_header' => '<msg-789@example.com>',
+            'message_id_header' => '<msg-789@cgtest.invalid>',
         ]);
         $job = RemediationJob::create([
             'tenant_id' => $tenant->id,
@@ -178,30 +229,36 @@ class RemediationTest extends TestCase
         ]);
 
         $this->app->instance(GmailRemovalService::class, new FakeGmailRemovalService(
-            ['ok@example.com', 'fail@example.com'],
-            [
-                'ok@example.com' => ['ok' => true],
-                'fail@example.com' => ['ok' => false, 'error' => 'Not found'],
-            ]
+            [],
+            ['reporter@cgtest.invalid' => ['ok' => true, 'skipped' => true]]
         ));
 
         (new ProcessRemediationJob($job))->handle();
 
         $job->refresh();
-        $this->assertSame(RemediationJob::STATUS_PARTIALLY_FAILED, $job->status);
-        $this->assertSame(1, $job->removed_count);
-        $this->assertSame(1, $job->failed_count);
+        $this->assertSame(RemediationJob::STATUS_FAILED, $job->status);
+        $this->assertSame(0, $job->removed_count);
+        $this->assertSame(1, $job->skipped_count);
+        $this->assertSame(0, $job->failed_count);
     }
 
     public function test_all_failed_ends_as_failed(): void
     {
-        $tenant = Tenant::create(['name' => 'T', 'domain' => 'example.com', 'slug' => 't', 'active' => true]);
+        config(['phishing.gmail_removal_enabled' => true]);
+        $tenant = Tenant::create([
+            'name' => 'T',
+            'domain' => 'cgtest.invalid',
+            'slug' => 't-fl-'.uniqid(),
+            'active' => true,
+            'google_credentials_path' => $this->googleCredsPath(),
+            'google_admin_user' => 'admin@cgtest.invalid',
+        ]);
         $approver = User::factory()->create(['tenant_id' => $tenant->id]);
         $reported = ReportedMessage::withoutGlobalScope('tenant')->create([
             'tenant_id' => $tenant->id,
-            'reporter_email' => 'u@example.com',
+            'reporter_email' => 'reporter@cgtest.invalid',
             'subject' => 'Test',
-            'message_id_header' => '<msg-999@example.com>',
+            'message_id_header' => '<msg-999@cgtest.invalid>',
         ]);
         $job = RemediationJob::create([
             'tenant_id' => $tenant->id,
@@ -213,10 +270,9 @@ class RemediationTest extends TestCase
         ]);
 
         $this->app->instance(GmailRemovalService::class, new FakeGmailRemovalService(
-            ['a@example.com', 'b@example.com'],
+            [],
             [
-                'a@example.com' => ['ok' => false, 'error' => 'Error 1'],
-                'b@example.com' => ['ok' => false, 'error' => 'Error 2'],
+                'reporter@cgtest.invalid' => ['ok' => false, 'error' => 'Error 1'],
             ]
         ));
 
@@ -225,6 +281,6 @@ class RemediationTest extends TestCase
         $job->refresh();
         $this->assertSame(RemediationJob::STATUS_FAILED, $job->status);
         $this->assertSame(0, $job->removed_count);
-        $this->assertSame(2, $job->failed_count);
+        $this->assertSame(1, $job->failed_count);
     }
 }

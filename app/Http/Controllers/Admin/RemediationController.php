@@ -3,8 +3,9 @@
 namespace App\Http\Controllers\Admin;
 
 use App\Http\Controllers\Controller;
-use App\Models\ReportedMessage;
+use App\Jobs\ProcessRemediationJob;
 use App\Models\RemediationJob;
+use App\Models\ReportedMessage;
 use App\Services\RemediationPreflightService;
 use Illuminate\Http\Request;
 use Illuminate\View\View;
@@ -35,6 +36,7 @@ class RemediationController extends Controller
     public function show(RemediationJob $job): View
     {
         $job->load('reportedMessage', 'approver', 'items', 'mailboxActionLogs');
+
         return view('admin.remediation.show', compact('job'));
     }
 
@@ -52,17 +54,29 @@ class RemediationController extends Controller
         if (! $pre['ok']) {
             return redirect()->back()->with('error', $pre['error'] ?? 'Remediation preflight failed.');
         }
+        $hasOpenJob = RemediationJob::where('reported_message_id', $reported->id)
+            ->whereIn('status', [
+                RemediationJob::STATUS_APPROVED_FOR_REMOVAL,
+                RemediationJob::STATUS_REMOVAL_IN_PROGRESS,
+            ])
+            ->exists();
+        if ($hasOpenJob) {
+            return redirect()->back()->with('error', 'A remediation job is already queued or running for this report.');
+        }
         $job = RemediationJob::create([
             'tenant_id' => $reported->tenant_id,
             'reported_message_id' => $reported->id,
             'correlation_id' => $reported->correlation_id ?? \Illuminate\Support\Str::uuid()->toString(),
-            'status' => RemediationJob::STATUS_APPROVED_FOR_REMOVAL,
+            'status' => RemediationJob::STATUS_REMOVAL_IN_PROGRESS,
             'dry_run' => (bool) $request->input('dry_run', false),
             'approved_by' => auth()->id(),
             'approved_at' => now(),
             'approval_notes' => $request->input('approval_notes'),
+            'started_at' => now(),
         ]);
-        return redirect()->route('admin.remediation.show', $job)->with('success', 'Remediation job created. Run it to execute removal.');
+        ProcessRemediationJob::dispatch($job);
+
+        return redirect()->route('admin.remediation.show', $job)->with('success', 'Remediation approved and queued. It will run automatically.');
     }
 
     public function run(ReportedMessage $reported)
@@ -77,11 +91,18 @@ class RemediationController extends Controller
             return redirect()->back()->with('error', $pre['error'] ?? 'Remediation preflight failed.');
         }
         $job = RemediationJob::where('reported_message_id', $reported->id)->latest()->first();
-        if (! $job || $job->status !== RemediationJob::STATUS_APPROVED_FOR_REMOVAL) {
-            return redirect()->back()->with('error', 'No approved job found.');
+        if (! $job) {
+            return redirect()->back()->with('error', 'No remediation job found.');
         }
-        app(\App\Jobs\ProcessRemediationJob::class)->dispatch($job);
+        if ($job->status === RemediationJob::STATUS_REMOVAL_IN_PROGRESS) {
+            return redirect()->route('admin.remediation.show', $job)->with('info', 'Remediation is already running.');
+        }
+        if ($job->status !== RemediationJob::STATUS_APPROVED_FOR_REMOVAL) {
+            return redirect()->back()->with('error', 'This job cannot be run again from this action. Approve a new remediation if needed.');
+        }
         $job->update(['status' => RemediationJob::STATUS_REMOVAL_IN_PROGRESS, 'started_at' => now()]);
+        ProcessRemediationJob::dispatch($job);
+
         return redirect()->route('admin.remediation.show', $job)->with('success', 'Remediation job queued.');
     }
 }
