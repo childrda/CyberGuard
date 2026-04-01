@@ -85,12 +85,32 @@ class SlackReportAlertService
 
     private function buildSummaryText(ReportedMessage $reported): string
     {
+        $flags = $this->userActionFlags($reported);
+        $tags = [];
+        if ($flags['clicked_link']) {
+            $tags[] = 'CLICKED LINK';
+        }
+        if ($flags['entered_info']) {
+            $tags[] = 'ENTERED INFO';
+        }
+        if ($flags['entered_password']) {
+            $tags[] = 'ENTERED PASSWORD';
+        }
+        if ($reported->reporter_mailbox_cleared_at) {
+            $tags[] = 'RECALLED';
+        }
+        if ($reported->remediation_via_google_admin) {
+            $tags[] = 'GOOGLE ADMIN REMOVAL';
+        }
+        $tagSuffix = $tags !== [] ? ' ['.implode('] [', $tags).']' : '';
+
         return sprintf(
-            '[%s] %s reported by %s: %s',
+            '[%s] %s reported by %s: %s%s',
             strtoupper($reported->report_type ?: 'phish'),
             $this->statusLabel($reported),
             $reported->reporter_email ?: 'unknown',
-            $reported->subject ?: '(no subject)'
+            $reported->subject ?: '(no subject)',
+            $tagSuffix
         );
     }
 
@@ -120,13 +140,22 @@ class SlackReportAlertService
             ],
         ];
 
-        $riskLines = $this->highRiskUserActionLines($reported);
-        if ($riskLines !== []) {
+        $blocks[] = [
+            'type' => 'section',
+            'text' => [
+                'type' => 'mrkdwn',
+                'text' => $this->buildReporterAndRemediationSection($reported),
+            ],
+        ];
+
+        $flags = $this->userActionFlags($reported);
+        if ($flags['clicked_link'] || $flags['entered_info'] || $flags['entered_password']) {
+            $blocks[] = ['type' => 'divider'];
             $blocks[] = [
                 'type' => 'section',
                 'text' => [
                     'type' => 'mrkdwn',
-                    'text' => "*:rotating_light: Reporter risk (read this first)*\n".implode("\n", $riskLines),
+                    'text' => "*:rotating_light: High priority*\n".$this->highRiskCalloutText($flags),
                 ],
             ];
         }
@@ -160,31 +189,146 @@ class SlackReportAlertService
     }
 
     /**
-     * @return list<string>
+     * Always-on block: reporter checkboxes + recall + Google investigation handoff.
      */
-    private function highRiskUserActionLines(ReportedMessage $reported): array
+    private function buildReporterAndRemediationSection(ReportedMessage $reported): string
     {
-        $actions = $reported->user_actions ?? [];
-        if (! is_array($actions)) {
-            return [];
+        $flags = $this->userActionFlags($reported);
+        $lines = [
+            '*Reporter self-report*',
+            '• Clicked a link: '.($flags['clicked_link'] ? ':warning: *Yes*' : '_No_'),
+            '• Entered sensitive information: '.($flags['entered_info'] ? ':warning: *Yes*' : '_No_'),
+        ];
+        if ($flags['entered_password']) {
+            $lines[] = '• Entered a password: :warning: *Yes*';
         }
-        $lines = [];
-        if (in_array('clicked_link', $actions, true)) {
-            $lines[] = '• *The reporter said they clicked a link.*';
+        $lines[] = '';
+        $lines[] = '*Email remediation*';
+        if ($reported->reporter_mailbox_cleared_at) {
+            $lines[] = '• Reporter copy *recalled* from mailbox — '.$reported->reporter_mailbox_cleared_at->toDateTimeString().' UTC';
+        } else {
+            $lines[] = '• Reporter copy recalled: _Not yet_';
         }
-        if (in_array('entered_info', $actions, true)) {
-            $lines[] = '• *The reporter said they entered sensitive information.*';
-        }
-        if (in_array('entered_password', $actions, true)) {
-            $lines[] = '• *The reporter said they entered a password.*';
+        if ($reported->remediation_via_google_admin) {
+            $lines[] = '• Domain-wide removal: *Google Admin investigation tool* (complete there; CyberGuard did not bulk-remove mail)';
+        } else {
+            $lines[] = '• Domain-wide (Google investigation tool): _Not flagged in CyberGuard_';
         }
 
-        return $lines;
+        return implode("\n", $lines);
+    }
+
+    /**
+     * @param  array{clicked_link: bool, entered_info: bool, entered_password: bool}  $flags
+     */
+    private function highRiskCalloutText(array $flags): string
+    {
+        $parts = [];
+        if ($flags['clicked_link']) {
+            $parts[] = 'Reporter *clicked a link*.';
+        }
+        if ($flags['entered_info']) {
+            $parts[] = 'Reporter *entered sensitive information*.';
+        }
+        if ($flags['entered_password']) {
+            $parts[] = 'Reporter *entered a password*.';
+        }
+
+        return 'Treat as a potential compromise: '.implode(' ', $parts);
+    }
+
+    /**
+     * @return array{clicked_link: bool, entered_info: bool, entered_password: bool}
+     */
+    private function userActionFlags(ReportedMessage $reported): array
+    {
+        $tokens = $this->normalizeUserActionTokens($reported->user_actions);
+
+        $clicked = false;
+        $enteredInfo = false;
+        $enteredPassword = false;
+
+        foreach ($tokens as $t) {
+            if ($this->tokenMeansClickedLink($t)) {
+                $clicked = true;
+            }
+            if ($this->tokenMeansEnteredInfo($t)) {
+                $enteredInfo = true;
+            }
+            if ($this->tokenMeansEnteredPassword($t)) {
+                $enteredPassword = true;
+            }
+        }
+
+        return [
+            'clicked_link' => $clicked,
+            'entered_info' => $enteredInfo,
+            'entered_password' => $enteredPassword,
+        ];
+    }
+
+    /**
+     * @return list<string>
+     */
+    private function normalizeUserActionTokens(mixed $raw): array
+    {
+        if ($raw === null || $raw === '') {
+            return [];
+        }
+        if (is_string($raw)) {
+            $decoded = json_decode($raw, true);
+            if (json_last_error() === JSON_ERROR_NONE && is_array($decoded)) {
+                return $this->normalizeUserActionTokens($decoded);
+            }
+
+            return [strtolower(trim($raw))];
+        }
+        if (! is_array($raw)) {
+            return [];
+        }
+        $out = [];
+        foreach ($raw as $key => $value) {
+            if (is_string($value) && trim($value) !== '') {
+                $out[] = strtolower(trim($value));
+            } elseif (is_bool($value) && $value === true && is_string($key) && trim($key) !== '') {
+                $out[] = strtolower(trim($key));
+            } elseif (is_array($value)) {
+                foreach ($this->normalizeUserActionTokens($value) as $t) {
+                    $out[] = $t;
+                }
+            }
+        }
+
+        return array_values(array_unique($out));
+    }
+
+    private function tokenMeansClickedLink(string $t): bool
+    {
+        if (in_array($t, ['clicked_link', 'clicked', 'click', 'i clicked the link'], true)) {
+            return true;
+        }
+
+        return $t === 'clicked link' || str_contains($t, 'clicked_link');
+    }
+
+    private function tokenMeansEnteredInfo(string $t): bool
+    {
+        if (in_array($t, ['entered_info', 'entered_information', 'i entered information'], true)) {
+            return true;
+        }
+
+        return str_contains($t, 'entered_info')
+            || ($t !== 'entered_password' && str_contains($t, 'entered') && (str_contains($t, 'info') || str_contains($t, 'information')));
+    }
+
+    private function tokenMeansEnteredPassword(string $t): bool
+    {
+        return in_array($t, ['entered_password', 'password'], true) || str_contains($t, 'entered_password');
     }
 
     private function statusLabel(ReportedMessage $reported): string
     {
-        $base = match ($reported->analyst_status) {
+        return match ($reported->analyst_status) {
             null, '', 'pending' => 'Under review',
             'analyst_confirmed_real' => 'Confirmed phishing',
             'analyst_confirmed_spam' => 'Confirmed spam',
@@ -192,20 +336,6 @@ class SlackReportAlertService
             'analyst_confirmed_simulation' => 'Confirmed simulation',
             default => ucwords(str_replace('_', ' ', (string) $reported->analyst_status)),
         };
-
-        $suffix = [];
-        if ($reported->remediation_via_google_admin) {
-            $suffix[] = 'Remediation will take place in Google Admin (investigation tool)';
-        }
-        if ($reported->reporter_mailbox_cleared_at) {
-            $suffix[] = 'Reporter copy recalled from mailbox';
-        }
-
-        if ($suffix === []) {
-            return $base;
-        }
-
-        return $base.' — '.implode(' — ', $suffix);
     }
 
     private function statusEmoji(ReportedMessage $reported): string

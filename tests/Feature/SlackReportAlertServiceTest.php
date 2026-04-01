@@ -89,5 +89,51 @@ class SlackReportAlertServiceTest extends TestCase
                 && ($request['ts'] ?? null) === '1712590674.12345';
         });
     }
+
+    public function test_sync_includes_reporter_self_report_and_remediation_in_blocks(): void
+    {
+        $tenant = Tenant::create([
+            'name' => 'Tenant',
+            'domain' => 'cgtest.invalid',
+            'slug' => 'slack-flags-'.uniqid(),
+            'active' => true,
+            'slack_alerts_enabled' => true,
+            'slack_bot_token' => 'xoxb-test',
+            'slack_channel' => 'phishing-alert',
+        ]);
+
+        $reported = ReportedMessage::withoutGlobalScope('tenant')->create([
+            'tenant_id' => $tenant->id,
+            'reporter_email' => 'user@cgtest.invalid',
+            'subject' => 'Suspicious mail',
+            'from_address' => 'attacker@evil.test',
+            'report_type' => 'phish',
+            'user_actions' => ['clicked_link', 'entered_info'],
+            'remediation_via_google_admin' => true,
+            'reporter_mailbox_cleared_at' => now(),
+        ]);
+
+        Http::fake([
+            'https://slack.com/api/chat.postMessage' => Http::response([
+                'ok' => true,
+                'channel' => 'C999',
+                'ts' => '1712590674.99999',
+            ]),
+        ]);
+
+        app(SlackReportAlertService::class)->syncReportAlert($reported->fresh('tenant'));
+
+        Http::assertSent(function ($request) {
+            $blocks = $request['blocks'] ?? [];
+            $flat = json_encode($blocks);
+
+            return str_contains((string) $flat, 'Reporter self-report')
+                && str_contains((string) $flat, 'Clicked a link')
+                && str_contains((string) $flat, 'Entered sensitive information')
+                && str_contains((string) $flat, 'Google Admin investigation tool')
+                && str_contains((string) $flat, 'recalled')
+                && str_contains((string) $flat, 'High priority');
+        });
+    }
 }
 
