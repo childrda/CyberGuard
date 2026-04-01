@@ -127,13 +127,11 @@ class SlackReportAlertServiceTest extends TestCase
             $blocks = $request['blocks'] ?? [];
             $flat = json_encode($blocks);
 
-            return str_contains((string) $flat, 'Reporter self-report')
-                && str_contains((string) $flat, 'Clicked a link')
-                && str_contains((string) $flat, 'Entered sensitive information')
-                && str_contains((string) $flat, 'Google Admin investigation tool')
-                && str_contains((string) $flat, 'recalled')
+            return str_contains((string) $flat, 'Clicked a link')
+                && str_contains((string) $flat, 'Entered sensitive info')
+                && str_contains((string) $flat, 'Google Admin')
+                && str_contains((string) $flat, 'Recalled')
                 && str_contains((string) $flat, 'High priority');
         });
     }
 }
-

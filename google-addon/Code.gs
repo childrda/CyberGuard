@@ -85,12 +85,33 @@ function showReportPhishOptions(e) {
     .build();
 }
 
+/**
+ * Ensure checkbox values are plain strings for the webhook JSON (Gmail may return mixed types).
+ */
+function coerceUserActionsToStrings(userActions) {
+  if (!userActions) return [];
+  var arr = userActions instanceof Array ? userActions : [userActions];
+  var out = [];
+  for (var i = 0; i < arr.length; i++) {
+    var x = arr[i];
+    if (typeof x === 'string' && x) {
+      out.push(x);
+    } else if (x && typeof x === 'object' && x.value) {
+      out.push(String(x.value));
+    } else if (x != null) {
+      out.push(String(x));
+    }
+  }
+  return out;
+}
+
 function reportPhishWithOptions(e) {
   var messageId = e.parameters.messageId;
   var userActions = [];
   try {
     if (e.formInputs && e.formInputs.user_actions) {
-      userActions = e.formInputs.user_actions instanceof Array ? e.formInputs.user_actions : [e.formInputs.user_actions];
+      var raw = e.formInputs.user_actions instanceof Array ? e.formInputs.user_actions : [e.formInputs.user_actions];
+      userActions = coerceUserActionsToStrings(raw);
     }
   } catch (err) {}
   var eventObj = { messageMetadata: { messageId: messageId, accessToken: e.parameters.accessToken || (e.messageMetadata ? e.messageMetadata.accessToken : null) } };

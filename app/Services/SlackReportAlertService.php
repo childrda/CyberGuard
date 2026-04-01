@@ -116,11 +116,32 @@ class SlackReportAlertService
 
     private function buildBlocks(ReportedMessage $reported): array
     {
+        $flags = $this->userActionFlags($reported);
         $status = $this->statusLabel($reported);
         $statusEmoji = $this->statusEmoji($reported);
         $adminUrl = rtrim((string) config('app.url'), '/').'/admin/reports/'.$reported->id;
 
-        $fields = [
+        $clickedText = $flags['clicked_link'] ? ':warning: *Yes*' : 'No';
+        $enteredInfoText = $flags['entered_info'] ? ':warning: *Yes*' : 'No';
+        $enteredPasswordExtra = $flags['entered_password'] ? "\n_:key: Password reported too_" : '';
+
+        $mailboxText = $reported->reporter_mailbox_cleared_at
+            ? ':white_check_mark: *Recalled* — '.$reported->reporter_mailbox_cleared_at->toDateTimeString().' UTC'
+            : '_Not yet_';
+
+        $domainWideText = $reported->remediation_via_google_admin
+            ? ':gear: *Google Admin* investigation tool\n_(CyberGuard did not bulk-remove)_'
+            : '_Not flagged_';
+
+        // First field grid: reporter risk + remediation (same two-column style as the rest of the alert).
+        $riskAndRemediationFields = [
+            ['type' => 'mrkdwn', 'text' => "*Clicked a link*\n{$clickedText}"],
+            ['type' => 'mrkdwn', 'text' => "*Entered sensitive info*\n{$enteredInfoText}{$enteredPasswordExtra}"],
+            ['type' => 'mrkdwn', 'text' => "*Reporter mailbox*\n{$mailboxText}"],
+            ['type' => 'mrkdwn', 'text' => "*Domain-wide removal*\n{$domainWideText}"],
+        ];
+
+        $metaFields = [
             ['type' => 'mrkdwn', 'text' => "*Status*\n{$statusEmoji} {$status}"],
             ['type' => 'mrkdwn', 'text' => "*Type*\n".strtoupper((string) ($reported->report_type ?: 'phish'))],
             ['type' => 'mrkdwn', 'text' => "*Reporter*\n".($reported->reporter_email ?: '—')],
@@ -142,13 +163,9 @@ class SlackReportAlertService
 
         $blocks[] = [
             'type' => 'section',
-            'text' => [
-                'type' => 'mrkdwn',
-                'text' => $this->buildReporterAndRemediationSection($reported),
-            ],
+            'fields' => $riskAndRemediationFields,
         ];
 
-        $flags = $this->userActionFlags($reported);
         if ($flags['clicked_link'] || $flags['entered_info'] || $flags['entered_password']) {
             $blocks[] = ['type' => 'divider'];
             $blocks[] = [
@@ -162,7 +179,7 @@ class SlackReportAlertService
 
         $blocks[] = [
             'type' => 'section',
-            'fields' => $fields,
+            'fields' => $metaFields,
         ];
         $blocks[] = [
             'type' => 'actions',
@@ -186,36 +203,6 @@ class SlackReportAlertService
         }
 
         return $blocks;
-    }
-
-    /**
-     * Always-on block: reporter checkboxes + recall + Google investigation handoff.
-     */
-    private function buildReporterAndRemediationSection(ReportedMessage $reported): string
-    {
-        $flags = $this->userActionFlags($reported);
-        $lines = [
-            '*Reporter self-report*',
-            '• Clicked a link: '.($flags['clicked_link'] ? ':warning: *Yes*' : '_No_'),
-            '• Entered sensitive information: '.($flags['entered_info'] ? ':warning: *Yes*' : '_No_'),
-        ];
-        if ($flags['entered_password']) {
-            $lines[] = '• Entered a password: :warning: *Yes*';
-        }
-        $lines[] = '';
-        $lines[] = '*Email remediation*';
-        if ($reported->reporter_mailbox_cleared_at) {
-            $lines[] = '• Reporter copy *recalled* from mailbox — '.$reported->reporter_mailbox_cleared_at->toDateTimeString().' UTC';
-        } else {
-            $lines[] = '• Reporter copy recalled: _Not yet_';
-        }
-        if ($reported->remediation_via_google_admin) {
-            $lines[] = '• Domain-wide removal: *Google Admin investigation tool* (complete there; CyberGuard did not bulk-remove mail)';
-        } else {
-            $lines[] = '• Domain-wide (Google investigation tool): _Not flagged in CyberGuard_';
-        }
-
-        return implode("\n", $lines);
     }
 
     /**

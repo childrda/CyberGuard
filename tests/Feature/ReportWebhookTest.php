@@ -82,4 +82,37 @@ class ReportWebhookTest extends TestCase
         $this->assertDatabaseHas('reported_messages', ['reporter_email' => 'user@example.com']);
         Queue::assertPushed(SyncReportedMessageToSlackJob::class);
     }
+
+    public function test_webhook_normalizes_user_actions_when_values_are_objects(): void
+    {
+        Queue::fake();
+        $this->createTenantWithSecret('cgtest.invalid', 'test-secret');
+        $payload = [
+            'reporter_email' => 'user@cgtest.invalid',
+            'report_type' => 'phish',
+            'subject' => 'Test',
+            'user_actions' => [
+                ['value' => 'clicked_link'],
+                ['Value' => 'entered_info'],
+            ],
+        ];
+        $body = json_encode($payload);
+        $sig = 'sha256='.hash_hmac('sha256', $body, 'test-secret');
+
+        $response = $this->call('POST', '/api/webhook/report', [], [], [], [
+            'CONTENT_TYPE' => 'application/json',
+            'HTTP_X_PHISH_SIGNATURE' => $sig,
+        ], $body);
+
+        $response->assertStatus(200);
+        $this->assertDatabaseHas('reported_messages', [
+            'reporter_email' => 'user@cgtest.invalid',
+        ]);
+        $row = \App\Models\ReportedMessage::withoutGlobalScope('tenant')
+            ->where('reporter_email', 'user@cgtest.invalid')
+            ->first();
+        $this->assertIsArray($row->user_actions);
+        $this->assertContains('clicked_link', $row->user_actions);
+        $this->assertContains('entered_info', $row->user_actions);
+    }
 }
