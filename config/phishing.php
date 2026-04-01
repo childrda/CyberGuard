@@ -32,6 +32,13 @@ return [
 
     /*
     |--------------------------------------------------------------------------
+    | Queue name for external integrations (Slack report alerts)
+    |--------------------------------------------------------------------------
+    */
+    'slack_queue' => env('PHISHING_SLACK_QUEUE', 'notifications'),
+
+    /*
+    |--------------------------------------------------------------------------
     | Allowed sender domains (fallback only)
     |--------------------------------------------------------------------------
     | Prefer tenant-level allowed_domains (per tenant in Settings). This is only

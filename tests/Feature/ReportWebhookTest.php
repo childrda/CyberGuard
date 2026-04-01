@@ -2,8 +2,10 @@
 
 namespace Tests\Feature;
 
+use App\Jobs\SyncReportedMessageToSlackJob;
 use App\Models\Tenant;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Queue;
 use Tests\TestCase;
 
 class ReportWebhookTest extends TestCase
@@ -34,9 +36,10 @@ class ReportWebhookTest extends TestCase
         $body = json_encode($payload);
         $sig = 'sha256='.hash_hmac('sha256', $body, 'any-secret');
 
-        $response = $this->withBody($body, 'application/json')
-            ->withHeader('X-Phish-Signature', $sig)
-            ->post('/api/webhook/report');
+        $response = $this->call('POST', '/api/webhook/report', [], [], [], [
+            'CONTENT_TYPE' => 'application/json',
+            'HTTP_X_PHISH_SIGNATURE' => $sig,
+        ], $body);
 
         $response->assertStatus(422);
         $response->assertJson(['error' => 'Unknown tenant']);
@@ -58,6 +61,7 @@ class ReportWebhookTest extends TestCase
 
     public function test_webhook_accepts_valid_payload_when_tenant_exists(): void
     {
+        Queue::fake();
         $this->createTenantWithSecret('example.com', 'test-secret');
         $payload = [
             'reporter_email' => 'user@example.com',
@@ -68,12 +72,14 @@ class ReportWebhookTest extends TestCase
         $body = json_encode($payload);
         $sig = 'sha256='.hash_hmac('sha256', $body, 'test-secret');
 
-        $response = $this->withBody($body, 'application/json')
-            ->withHeader('X-Phish-Signature', $sig)
-            ->post('/api/webhook/report');
+        $response = $this->call('POST', '/api/webhook/report', [], [], [], [
+            'CONTENT_TYPE' => 'application/json',
+            'HTTP_X_PHISH_SIGNATURE' => $sig,
+        ], $body);
 
         $response->assertStatus(200);
         $response->assertJson(['ok' => true, 'matched_simulation' => false]);
         $this->assertDatabaseHas('reported_messages', ['reporter_email' => 'user@example.com']);
+        Queue::assertPushed(SyncReportedMessageToSlackJob::class);
     }
 }

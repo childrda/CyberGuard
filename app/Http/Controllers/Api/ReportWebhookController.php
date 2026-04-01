@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
+use App\Jobs\SyncReportedMessageToSlackJob;
 use App\Models\PhishingEvent;
 use App\Models\PhishingMessage;
 use App\Models\PhishingReport;
@@ -191,6 +192,8 @@ class ReportWebhookController extends Controller
                 $reporterEmail
             );
         }
+
+        SyncReportedMessageToSlackJob::dispatch($reported->id);
 
         return response()->json([
             'ok' => true,

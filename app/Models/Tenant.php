@@ -14,6 +14,9 @@ class Tenant extends Model
         'allowed_domains',
         'google_credentials_path',
         'webhook_secret',
+        'slack_alerts_enabled',
+        'slack_bot_token',
+        'slack_channel',
         'addon_config',
         'campaign_settings',
         'reporting_rules',
@@ -33,6 +36,7 @@ class Tenant extends Model
             'allowed_domains' => 'array',
             'directory_sync_enabled' => 'boolean',
             'gamification_enabled' => 'boolean',
+            'slack_alerts_enabled' => 'boolean',
             'active' => 'boolean',
         ];
     }

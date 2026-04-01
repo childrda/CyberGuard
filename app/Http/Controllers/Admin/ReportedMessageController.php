@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Admin;
 
 use App\Http\Controllers\Controller;
+use App\Jobs\SyncReportedMessageToSlackJob;
 use App\Models\PhishingReport;
 use App\Models\ReportedMessage;
 use App\Services\AuditService;
@@ -103,6 +104,7 @@ class ReportedMessageController extends Controller
         }
 
         $this->audit->log('report_confirmed_real', $reported);
+        SyncReportedMessageToSlackJob::dispatch($reported->id);
 
         return redirect()->route('admin.reports.show', $reported)
             ->with('success', 'Marked as real phishing. You can now remove it from mailboxes below.');
@@ -128,6 +130,7 @@ class ReportedMessageController extends Controller
         ]);
 
         $this->audit->log('report_false_positive', $reported);
+        SyncReportedMessageToSlackJob::dispatch($reported->id);
 
         return redirect()->route('admin.reports.show', $reported)->with('success', 'Marked as false positive.');
     }

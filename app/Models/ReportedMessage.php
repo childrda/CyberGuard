@@ -33,6 +33,8 @@ class ReportedMessage extends Model
         'analyst_reviewed_at',
         'analyst_notes',
         'user_actions',
+        'slack_channel',
+        'slack_message_ts',
     ];
 
     protected function casts(): array

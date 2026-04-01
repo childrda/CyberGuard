@@ -259,6 +259,25 @@ The **Google Workspace add-on** is included in this repo (`google-addon/` folder
 
 ---
 
+## Slack report alerts (per tenant)
+
+CyberGuard can push report workflow updates to Slack and keep one thread-like alert updated over time.
+
+1. In **Settings → Edit tenant**, configure:
+   - **Enable Slack alerts**
+   - **Slack bot token** (Bot token, usually `xoxb-...`)
+   - **Slack channel** (channel name like `phishing-alert` or a channel ID)
+2. Ensure the Slack app/bot has permission to post and update messages in that channel.
+3. Run a queue worker that includes the Slack queue (default `notifications`):  
+   `php artisan queue:work --queue=phishing-send,remediation,notifications`
+
+Behavior:
+- On new report submission, CyberGuard posts a Slack alert with status **Under review** (or current mapped status).
+- On analyst decisions (for example, confirmed phishing or false positive), CyberGuard updates the original Slack message instead of posting unrelated follow-ups.
+- CyberGuard stores Slack message correlation on the report record (`slack_channel`, `slack_message_ts`) so later updates target the same message.
+
+---
+
 ## Google Workspace deployment (production)
 
 - **Laravel:** Deploy to your server (PHP, MySQL, Redis recommended). In `.env` set `APP_URL` and `PHISHING_WEBHOOK_SECRET`. The add-on calls **POST** `/api/webhook/report`; the server verifies the request using the header `X-Phish-Signature: sha256=<hmac_sha256(raw_body, PHISHING_WEBHOOK_SECRET)>`.
@@ -339,6 +358,7 @@ These are set in **`.env`** (or in tenant **Settings** in the app where noted).
 | PHISHING_WEBHOOK_SECRET | Must **exactly match** the WEBHOOK_SECRET in your Gmail Apps Script project. | Long random string |
 | PHISHING_GMAIL_REMOVAL_ENABLED | When `true`, remediation can trash messages from mailboxes (requires Google credentials). | `false` (dev) |
 | PHISHING_OPEN_TRACKING | Track link opens in simulations. | `true` |
+| PHISHING_SLACK_QUEUE | Queue used for Slack report sync jobs. | `notifications` |
 
 ---
 

@@ -41,6 +41,9 @@ class TenantController extends Controller
             'remediation_policy' => ['required', 'in:report_only,analyst_approval_required,auto_remove_confirmed_phish'],
             'webhook_secret' => ['nullable', 'string', 'max:255'],
             'generate_webhook_secret' => ['nullable', 'boolean'],
+            'slack_alerts_enabled' => ['nullable', 'boolean'],
+            'slack_bot_token' => ['nullable', 'string', 'max:255'],
+            'slack_channel' => ['nullable', 'string', 'max:120'],
         ]);
 
         $slug = $validated['slug'] ?? Str::slug($validated['domain']);
@@ -53,12 +56,24 @@ class TenantController extends Controller
             $webhookSecret = Str::random(64);
         }
 
+        $slackEnabled = (bool) ($validated['slack_alerts_enabled'] ?? false);
+        $slackToken = trim((string) ($validated['slack_bot_token'] ?? '')) ?: null;
+        $slackChannel = trim((string) ($validated['slack_channel'] ?? '')) ?: 'phishing-alert';
+        if ($slackEnabled && ! $slackToken) {
+            return redirect()->back()->withInput()->withErrors([
+                'slack_bot_token' => 'Slack bot token is required when Slack alerts are enabled.',
+            ]);
+        }
+
         $tenant = Tenant::create([
             'name' => $validated['name'],
             'domain' => strtolower($validated['domain']),
             'slug' => $slug,
             'remediation_policy' => $validated['remediation_policy'],
             'webhook_secret' => $webhookSecret,
+            'slack_alerts_enabled' => $slackEnabled,
+            'slack_bot_token' => $slackToken,
+            'slack_channel' => $slackChannel,
             'active' => true,
         ]);
 
@@ -147,6 +162,9 @@ class TenantController extends Controller
             'remediation_policy' => ['required', 'in:report_only,analyst_approval_required,auto_remove_confirmed_phish'],
             'webhook_secret' => ['nullable', 'string', 'max:255'],
             'generate_webhook_secret' => ['nullable', 'boolean'],
+            'slack_alerts_enabled' => ['nullable', 'boolean'],
+            'slack_bot_token' => ['nullable', 'string', 'max:255'],
+            'slack_channel' => ['nullable', 'string', 'max:120'],
             'google_credentials_file' => ['nullable', 'file', 'mimes:json', 'max:102400'],
             'google_credentials_path' => ['nullable', 'string', 'max:500'],
             'google_admin_user' => ['nullable', 'email', 'max:255'],
@@ -184,6 +202,22 @@ class TenantController extends Controller
             $webhookSecret = $newWebhookSecret;
         }
 
+        $slackToken = trim((string) ($validated['slack_bot_token'] ?? ''));
+        if ($slackToken === '') {
+            $slackToken = $tenant->slack_bot_token;
+        }
+
+        $slackChannel = trim((string) ($validated['slack_channel'] ?? ''));
+        if ($slackChannel === '') {
+            $slackChannel = $tenant->slack_channel ?: 'phishing-alert';
+        }
+        $slackEnabled = (bool) ($validated['slack_alerts_enabled'] ?? false);
+        if ($slackEnabled && ! $slackToken) {
+            return redirect()->back()->withInput($request->except('slack_bot_token'))->withErrors([
+                'slack_bot_token' => 'Slack bot token is required when Slack alerts are enabled.',
+            ]);
+        }
+
         $tenant->update([
             'name' => $validated['name'],
             'domain' => strtolower($validated['domain']),
@@ -191,6 +225,9 @@ class TenantController extends Controller
             'allowed_domains' => $allowedList,
             'remediation_policy' => $validated['remediation_policy'],
             'webhook_secret' => $webhookSecret,
+            'slack_alerts_enabled' => $slackEnabled,
+            'slack_bot_token' => $slackToken,
+            'slack_channel' => $slackChannel,
             'google_credentials_path' => $credentialsPath,
             'google_admin_user' => trim((string) ($validated['google_admin_user'] ?? '')) !== '' ? trim($validated['google_admin_user']) : $tenant->google_admin_user,
             'directory_sync_enabled' => (bool) ($validated['directory_sync_enabled'] ?? false),

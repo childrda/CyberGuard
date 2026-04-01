@@ -69,6 +69,27 @@
                     <label for="generate_webhook_secret" class="text-sm text-slate-300">Rotate and auto-generate a new secret</label>
                 </div>
             </div>
+            <div class="rounded border border-slate-600 bg-slate-800/50 p-4">
+                <h3 class="text-sm font-medium text-slate-300 mb-2">Slack alerts</h3>
+                <div class="flex items-center gap-2 mb-3">
+                    <input type="hidden" name="slack_alerts_enabled" value="0">
+                    <input type="checkbox" name="slack_alerts_enabled" id="slack_alerts_enabled" value="1" {{ old('slack_alerts_enabled', $tenant->slack_alerts_enabled) ? 'checked' : '' }}
+                        class="rounded border-slate-500 bg-slate-700 text-blue-500 focus:ring-blue-500">
+                    <label for="slack_alerts_enabled" class="text-sm text-slate-300">Enable Slack alerts for report workflow</label>
+                </div>
+                <label for="slack_bot_token" class="block text-sm font-medium text-slate-300">Slack bot token</label>
+                <input type="text" name="slack_bot_token" id="slack_bot_token" value="{{ old('slack_bot_token') }}"
+                    class="mt-1 w-full rounded border border-slate-600 bg-slate-800 px-3 py-2 text-slate-100 placeholder-slate-500"
+                    placeholder="Leave blank to keep current token">
+                <p class="mt-1 text-xs text-slate-500">Current value is hidden for safety. Enter a new token to replace it.</p>
+                @error('slack_bot_token')<p class="mt-1 text-sm text-red-400">{{ $message }}</p>@enderror
+                <label for="slack_channel" class="block text-sm font-medium text-slate-300 mt-3">Slack channel</label>
+                <input type="text" name="slack_channel" id="slack_channel" value="{{ old('slack_channel', $tenant->slack_channel ?: 'phishing-alert') }}"
+                    class="mt-1 w-full rounded border border-slate-600 bg-slate-800 px-3 py-2 text-slate-100 placeholder-slate-500"
+                    placeholder="phishing-alert">
+                <p class="mt-1 text-xs text-slate-500">Channel name (without #) or channel ID.</p>
+                @error('slack_channel')<p class="mt-1 text-sm text-red-400">{{ $message }}</p>@enderror
+            </div>
             <div>
                 <label for="remediation_policy" class="block text-sm font-medium text-slate-300">Remediation policy</label>
                 <select name="remediation_policy" id="remediation_policy"
