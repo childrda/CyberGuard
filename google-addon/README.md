@@ -16,6 +16,8 @@ This Google Workspace Add-on lets users report suspicious emails from Gmail. Rep
 3. Replace `Code.gs` with the contents of this folder's `Code.gs`.
 4. Replace `appsscript.json` with this folder's `appsscript.json` (use View > Show manifest file to see it).
 
+**`urlFetchWhitelist` (required for Workspace add-ons):** Google requires every hostname your script reaches with `UrlFetchApp` to be listed as an HTTPS prefix ending with `/`. Edit `appsscript.json` and add a line that matches your `WEBHOOK_URL` origin—for example, if the webhook is `https://app.example.com/api/webhook/report`, add `"https://app.example.com/"`. The bundled manifest includes LCPS production as an example; remove or replace it for other deployments. Include `https://www.gstatic.com/` if you keep the default card icon URL in `Code.gs`.
+
 ### 2. Set script properties
 
 1. File > Project properties > Script properties.

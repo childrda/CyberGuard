@@ -3,6 +3,11 @@
   "runtimeVersion": "V8",
   "dependencies": {},
   "exceptionLogging": "STACKDRIVER",
+  "urlFetchWhitelist": [
+    "https://www.gstatic.com/",
+    "https://raw.githubusercontent.com/",
+    "https://cyberguard.lcps.k12.va.us/"
+  ],
   "oauthScopes": [
     "https://www.googleapis.com/auth/gmail.readonly",
     "https://www.googleapis.com/auth/gmail.addons.current.message.readonly",

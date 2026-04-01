@@ -16,6 +16,38 @@
 @if(session('success'))
     <p class="mb-4 text-sm text-green-400">{{ session('success') }}</p>
 @endif
+@if(session('status') === 'password-updated')
+    <p class="mb-4 text-sm text-green-400">Your password has been updated.</p>
+@endif
+
+<div class="mb-8 rounded-lg border border-slate-600 bg-slate-800/50 p-6 max-w-2xl">
+    <h2 class="text-sm font-semibold text-slate-400 uppercase tracking-wide mb-2">Your password</h2>
+    <p class="text-sm text-slate-500 mb-4">Change the password for <span class="text-slate-300">{{ auth()->user()->email }}</span>. Use a strong password.</p>
+    <form method="POST" action="{{ route('password.update') }}" class="space-y-4 max-w-md">
+        @csrf
+        @method('PUT')
+        <div>
+            <label for="current_password" class="block text-sm font-medium text-slate-300">Current password</label>
+            <input type="password" name="current_password" id="current_password" required autocomplete="current-password" class="mt-1 w-full rounded border border-slate-600 bg-slate-800 px-3 py-2 text-slate-100 text-sm">
+            @error('current_password')
+                <p class="mt-1 text-sm text-red-400">{{ $message }}</p>
+            @enderror
+        </div>
+        <div>
+            <label for="password" class="block text-sm font-medium text-slate-300">New password</label>
+            <input type="password" name="password" id="password" required autocomplete="new-password" class="mt-1 w-full rounded border border-slate-600 bg-slate-800 px-3 py-2 text-slate-100 text-sm">
+            @error('password')
+                <p class="mt-1 text-sm text-red-400">{{ $message }}</p>
+            @enderror
+        </div>
+        <div>
+            <label for="password_confirmation" class="block text-sm font-medium text-slate-300">Confirm new password</label>
+            <input type="password" name="password_confirmation" id="password_confirmation" required autocomplete="new-password" class="mt-1 w-full rounded border border-slate-600 bg-slate-800 px-3 py-2 text-slate-100 text-sm">
+        </div>
+        <button type="submit" class="rounded bg-slate-700 hover:bg-slate-600 px-4 py-2 text-white text-sm">Update password</button>
+    </form>
+    <p class="mt-4 text-xs text-slate-500">If you do not remember your current password, sign out and use <a href="{{ route('password.request') }}" class="text-blue-400 hover:underline">Forgot password</a> on the login page (email must be configured on the server).</p>
+</div>
 
 @if($tenant)
 <div class="rounded-lg border border-slate-600 bg-slate-800/50 p-6 max-w-2xl flex justify-between items-start">
